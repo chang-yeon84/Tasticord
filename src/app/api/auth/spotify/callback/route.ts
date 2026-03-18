@@ -61,8 +61,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.redirect(`${origin}/profile?connected=spotify`);
-  } catch (e) {
-    console.error('Spotify OAuth error:', e);
-    return NextResponse.redirect(`${origin}/profile?error=spotify_failed`);
+  } catch (e: any) {
+    return NextResponse.redirect(`${origin}/profile?error=spotify_catch_${encodeURIComponent(e?.message || 'unknown')}`);
   }
 }
