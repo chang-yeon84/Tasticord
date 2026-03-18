@@ -11,8 +11,9 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/profile?error=spotify_denied`);
   }
 
+  // Step 1: Exchange code for tokens
+  let tokens;
   try {
-    // Exchange code for tokens
     const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
       headers: {
@@ -25,36 +26,47 @@ export async function GET(request: Request) {
         redirect_uri: `${origin}/api/auth/spotify/callback`,
       }),
     });
+    const text = await tokenRes.text();
+    tokens = JSON.parse(text);
+  } catch (e: any) {
+    return NextResponse.redirect(`${origin}/profile?error=step1_${encodeURIComponent(e?.message?.slice(0, 80) || '')}`);
+  }
 
-    const tokenText = await tokenRes.text();
-    let tokens;
-    try {
-      tokens = JSON.parse(tokenText);
-    } catch {
-      return NextResponse.redirect(`${origin}/profile?error=spotify_token_parse_${encodeURIComponent(tokenText.slice(0, 100))}`);
-    }
+  if (!tokens.access_token) {
+    return NextResponse.redirect(`${origin}/profile?error=no_token`);
+  }
 
-    if (!tokens.access_token) {
-      return NextResponse.redirect(`${origin}/profile?error=spotify_no_token_${encodeURIComponent(JSON.stringify(tokens).slice(0, 100))}`);
-    }
-
-    // Get Spotify user profile
+  // Step 2: Get Spotify profile
+  let spotifyProfile;
+  try {
     const profileRes = await fetch('https://api.spotify.com/v1/me', {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
-    const spotifyProfile = await profileRes.json();
+    const text = await profileRes.text();
+    spotifyProfile = JSON.parse(text);
+  } catch (e: any) {
+    return NextResponse.redirect(`${origin}/profile?error=step2_${encodeURIComponent(e?.message?.slice(0, 80) || '')}`);
+  }
 
-    // Get current user
+  // Step 3: Get current user from Supabase
+  let userId;
+  try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.redirect(`${origin}/auth/login`);
-    }
+    userId = user?.id;
+  } catch (e: any) {
+    return NextResponse.redirect(`${origin}/profile?error=step3_${encodeURIComponent(e?.message?.slice(0, 80) || '')}`);
+  }
 
-    // Save to DB with admin client (bypasses RLS)
+  if (!userId) {
+    return NextResponse.redirect(`${origin}/auth/login`);
+  }
+
+  // Step 4: Save to DB
+  try {
     const admin = createAdminClient();
     const { error: dbError } = await admin.from('platform_connections').upsert({
-      user_id: user.id,
+      user_id: userId,
       platform: 'spotify',
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
@@ -65,11 +77,11 @@ export async function GET(request: Request) {
     }, { onConflict: 'user_id,platform' });
 
     if (dbError) {
-      return NextResponse.redirect(`${origin}/profile?error=db_${encodeURIComponent(dbError.message)}`);
+      return NextResponse.redirect(`${origin}/profile?error=step4_${encodeURIComponent(dbError.message.slice(0, 80))}`);
     }
-
-    return NextResponse.redirect(`${origin}/profile?connected=spotify`);
   } catch (e: any) {
-    return NextResponse.redirect(`${origin}/profile?error=catch_${encodeURIComponent(e?.message || 'unknown')}`);
+    return NextResponse.redirect(`${origin}/profile?error=step4catch_${encodeURIComponent(e?.message?.slice(0, 80) || '')}`);
   }
+
+  return NextResponse.redirect(`${origin}/profile?connected=spotify`);
 }
