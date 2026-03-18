@@ -45,7 +45,7 @@ export async function GET(request: Request) {
     }
 
     const admin = createAdminClient();
-    await admin.from('platform_connections').upsert({
+    const { error: dbError } = await admin.from('platform_connections').upsert({
       user_id: user.id,
       platform: 'spotify',
       access_token: tokens.access_token,
@@ -55,6 +55,10 @@ export async function GET(request: Request) {
       token_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
       metadata: { country: spotifyProfile.country, product: spotifyProfile.product },
     }, { onConflict: 'user_id,platform' });
+
+    if (dbError) {
+      return NextResponse.redirect(`${origin}/profile?error=db_${encodeURIComponent(dbError.message)}`);
+    }
 
     return NextResponse.redirect(`${origin}/profile?connected=spotify`);
   } catch (e) {

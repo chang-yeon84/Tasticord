@@ -177,18 +177,80 @@ ALTER TABLE taste_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE taste_cache ENABLE ROW LEVEL SECURITY;
 ALTER TABLE netflix_history ENABLE ROW LEVEL SECURITY;
 
--- 기본 RLS: 본인 데이터만 읽기/쓰기
-CREATE POLICY "Users can read own profile" ON profiles FOR SELECT USING (auth.uid() = id);
+-- ============================================
+-- RLS 정책
+-- ============================================
+
+-- profiles: 본인 + 친구 프로필 읽기/본인 수정
+CREATE POLICY "Users can read profiles" ON profiles FOR SELECT USING (
+  id = auth.uid() OR
+  id IN (SELECT friend_id FROM friendships WHERE user_id = auth.uid())
+);
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
+
+-- platform_connections: 본인 데이터 읽기/쓰기
 CREATE POLICY "Users can read own connections" ON platform_connections FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can manage own connections" ON platform_connections FOR ALL USING (auth.uid() = user_id);
 
--- 친구 활동은 친구만 볼 수 있음
+-- friendships: 본인 친구 관계 읽기
+CREATE POLICY "Users can read own friendships" ON friendships FOR SELECT USING (auth.uid() = user_id);
+
+-- activities: 본인 + 친구 활동 읽기, 본인 활동 생성
 CREATE POLICY "Users can read friend activities" ON activities FOR SELECT USING (
   auth.uid() = user_id OR
   user_id IN (SELECT friend_id FROM friendships WHERE user_id = auth.uid())
 );
 CREATE POLICY "Users can create own activities" ON activities FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- activity_likes: 본인 좋아요 관리
+CREATE POLICY "Users can manage own likes" ON activity_likes FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users can read likes" ON activity_likes FOR SELECT USING (true);
+
+-- activity_comments: 본인 댓글 관리, 모든 댓글 읽기
+CREATE POLICY "Users can manage own comments" ON activity_comments FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users can read comments" ON activity_comments FOR SELECT USING (true);
+
+-- shared_playlists: 참여자만 읽기, 생성자 관리
+CREATE POLICY "Users can read joined playlists" ON shared_playlists FOR SELECT USING (
+  id IN (SELECT playlist_id FROM playlist_members WHERE user_id = auth.uid())
+);
+CREATE POLICY "Users can create playlists" ON shared_playlists FOR INSERT WITH CHECK (auth.uid() = created_by);
+
+-- playlist_members: 참여 플레이리스트 읽기
+CREATE POLICY "Users can read playlist members" ON playlist_members FOR SELECT USING (
+  playlist_id IN (SELECT playlist_id FROM playlist_members WHERE user_id = auth.uid())
+);
+
+-- playlist_songs: 참여 플레이리스트 곡 읽기, 본인 곡 추가
+CREATE POLICY "Users can read playlist songs" ON playlist_songs FOR SELECT USING (
+  playlist_id IN (SELECT playlist_id FROM playlist_members WHERE user_id = auth.uid())
+);
+CREATE POLICY "Users can add songs" ON playlist_songs FOR INSERT WITH CHECK (auth.uid() = added_by);
+
+-- chat_rooms: 참여 채팅방 읽기
+CREATE POLICY "Users can read joined rooms" ON chat_rooms FOR SELECT USING (
+  id IN (SELECT room_id FROM chat_members WHERE user_id = auth.uid())
+);
+
+-- chat_members: 참여 채팅방 멤버 읽기
+CREATE POLICY "Users can read chat members" ON chat_members FOR SELECT USING (
+  room_id IN (SELECT room_id FROM chat_members WHERE user_id = auth.uid())
+);
+
+-- chat_messages: 참여 채팅방 메시지 읽기/보내기
+CREATE POLICY "Users can read chat messages" ON chat_messages FOR SELECT USING (
+  room_id IN (SELECT room_id FROM chat_members WHERE user_id = auth.uid())
+);
+CREATE POLICY "Users can send messages" ON chat_messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
+
+-- taste_reports: 본인 레포트 읽기
+CREATE POLICY "Users can read own reports" ON taste_reports FOR SELECT USING (auth.uid() = user_id);
+
+-- taste_cache: 본인 캐시 읽기
+CREATE POLICY "Users can read own cache" ON taste_cache FOR SELECT USING (auth.uid() = user_id);
+
+-- netflix_history: 본인 기록 관리
+CREATE POLICY "Users can manage own netflix" ON netflix_history FOR ALL USING (auth.uid() = user_id);
 
 -- 인덱스
 CREATE INDEX idx_activities_user_id ON activities(user_id);
