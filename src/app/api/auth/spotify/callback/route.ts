@@ -41,8 +41,12 @@ export async function GET(request: Request) {
   try {
     const profileRes = await fetch('https://api.spotify.com/v1/me', {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
+      cache: 'no-store',
     });
     const text = await profileRes.text();
+    if (!profileRes.ok) {
+      return NextResponse.redirect(`${origin}/profile?error=step2_status${profileRes.status}_${encodeURIComponent(text.slice(0, 100))}`);
+    }
     spotifyProfile = JSON.parse(text);
   } catch (e: any) {
     return NextResponse.redirect(`${origin}/profile?error=step2_${encodeURIComponent(e?.message?.slice(0, 80) || '')}`);
