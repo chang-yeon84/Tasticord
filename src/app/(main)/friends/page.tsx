@@ -1,23 +1,41 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import type { Profile } from '@/types';
+import { getAvatarColor } from '@/lib/utils/helpers';
 
-const mockFriends = [
-  { id: '1', nickname: '지수', status: 'Spotify · Supernova 듣는 중', online: true, color: 'bg-red-500/20 text-red-400' },
-  { id: '2', nickname: '민준', status: 'Steam · Elden Ring 플레이 중', online: true, color: 'bg-blue-500/20 text-blue-400' },
-  { id: '3', nickname: '서연', status: '최근: Interstellar 시청', online: false, color: 'bg-amber-500/20 text-amber-400' },
-  { id: '4', nickname: '현우', status: '최근: 한강 러닝 5.2km', online: false, color: 'bg-green-500/20 text-green-400' },
-  { id: '5', nickname: '하준', status: 'YouTube Music · 좋아요 42곡', online: false, color: 'bg-purple-500/20 text-purple-400' },
-];
+interface FriendWithProfile {
+  friend_id: string;
+  friend: Profile;
+}
 
 export default function FriendsPage() {
   const router = useRouter();
   const [search, setSearch] = useState('');
+  const [friends, setFriends] = useState<FriendWithProfile[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = mockFriends.filter((f) =>
-    f.nickname.toLowerCase().includes(search.toLowerCase())
+  useEffect(() => {
+    async function fetchFriends() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('friendships')
+        .select('friend_id, friend:profiles!friendships_friend_id_fkey(*)')
+        .eq('user_id', user.id);
+
+      setFriends((data || []) as unknown as FriendWithProfile[]);
+      setLoading(false);
+    }
+    fetchFriends();
+  }, []);
+
+  const filtered = friends.filter((f) =>
+    f.friend?.nickname?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -36,29 +54,52 @@ export default function FriendsPage() {
         카카오톡 친구 · {filtered.length}명
       </h3>
 
-      <div className="space-y-1">
-        {filtered.map((friend) => (
-          <div
-            key={friend.id}
-            onClick={() => router.push(`/friends/${friend.id}`)}
-            className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/35 rounded-xl p-4 flex items-center gap-4 cursor-pointer hover:bg-zinc-800/60 hover:border-zinc-700/50 transition-all"
-          >
-            <div className={`w-12 h-12 rounded-full ${friend.color} flex items-center justify-center font-bold text-sm relative flex-shrink-0`}>
-              {friend.nickname.slice(0, 2)}
-              {friend.online && (
-                <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-green-500 border-2 border-zinc-950" />
-              )}
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-4 animate-pulse flex items-center gap-4">
+              <div className="w-12 h-12 rounded-full bg-zinc-800" />
+              <div className="space-y-2 flex-1">
+                <div className="w-20 h-4 bg-zinc-800 rounded" />
+                <div className="w-32 h-3 bg-zinc-800 rounded" />
+              </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-medium">{friend.nickname}</div>
-              <div className="text-xs text-zinc-500 mt-0.5">{friend.status}</div>
-            </div>
-            <svg className="w-4 h-4 text-zinc-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-20">
+          <div className="text-zinc-600 text-lg">아직 친구가 없습니다</div>
+          <p className="text-zinc-700 text-sm mt-2">카카오톡 친구가 가입하면 자동으로 추가됩니다</p>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {filtered.map((item) => {
+            const friend = item.friend;
+            const colorClass = getAvatarColor(friend.nickname);
+            return (
+              <div
+                key={item.friend_id}
+                onClick={() => router.push(`/friends/${item.friend_id}`)}
+                className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/35 rounded-xl p-4 flex items-center gap-4 cursor-pointer hover:bg-zinc-800/60 hover:border-zinc-700/50 transition-all"
+              >
+                {friend.avatar_url ? (
+                  <img src={friend.avatar_url} alt={friend.nickname} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className={`w-12 h-12 rounded-full ${colorClass} flex items-center justify-center font-bold text-sm flex-shrink-0`}>
+                    {friend.nickname.slice(0, 2)}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium">{friend.nickname}</div>
+                </div>
+                <svg className="w-4 h-4 text-zinc-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
