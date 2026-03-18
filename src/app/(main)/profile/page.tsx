@@ -22,6 +22,19 @@ export default function ProfilePage() {
   const [friendCount, setFriendCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  const handleConnect = (platformKey: string) => {
+    if (['spotify', 'youtube_music', 'steam'].includes(platformKey)) {
+      const routes: Record<string, string> = {
+        spotify: '/api/auth/spotify',
+        youtube_music: '/api/auth/youtube',
+        steam: '/api/auth/steam',
+      };
+      window.location.href = routes[platformKey];
+    } else {
+      alert('준비 중입니다');
+    }
+  };
+
   useEffect(() => {
     async function fetchData() {
       const supabase = createClient();
@@ -71,7 +84,11 @@ export default function ProfilePage() {
         {allPlatforms.map((p) => {
           const isConnected = connectedPlatforms.includes(p.key);
           return (
-            <div key={p.key} className={`bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/35 rounded-xl p-4 flex items-center gap-4 ${!isConnected ? 'opacity-50' : ''}`}>
+            <div
+              key={p.key}
+              onClick={() => !isConnected && handleConnect(p.key)}
+              className={`bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/35 rounded-xl p-4 flex items-center gap-4 ${!isConnected ? 'opacity-50 cursor-pointer hover:opacity-70 transition' : ''}`}
+            >
               <div className={`w-10 h-10 rounded-lg ${p.bgColor} flex items-center justify-center flex-shrink-0 text-lg`}>{p.icon}</div>
               <div className="flex-1">
                 <div className="font-medium text-sm">{p.name}</div>

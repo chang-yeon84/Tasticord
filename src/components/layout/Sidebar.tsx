@@ -20,9 +20,9 @@ export default function Sidebar() {
   return (
     <aside className="w-[240px] border-r border-zinc-800/60 p-5 flex flex-col justify-between flex-shrink-0">
       <div>
-        <h1 className="text-2xl font-bold mb-10 bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent px-2">
+        <Link href="/" className="text-2xl font-bold mb-10 block bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent px-2">
           Tasticord
-        </h1>
+        </Link>
         <nav className="space-y-1">
           {navItems.map(({ href, label, icon: Icon }) => {
             const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);

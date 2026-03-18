@@ -52,6 +52,7 @@ export function useAuth() {
   const signOut = async () => {
     await supabase.auth.signOut();
     setCurrentUser(null);
+    window.location.href = '/auth/login';
   };
 
   return { currentUser, loading, signInWithKakao, signOut };
