@@ -26,9 +26,16 @@ export async function GET(request: Request) {
       }),
     });
 
-    const tokens = await tokenRes.json();
+    const tokenText = await tokenRes.text();
+    let tokens;
+    try {
+      tokens = JSON.parse(tokenText);
+    } catch {
+      return NextResponse.redirect(`${origin}/profile?error=spotify_token_parse_${encodeURIComponent(tokenText.slice(0, 100))}`);
+    }
+
     if (!tokens.access_token) {
-      return NextResponse.redirect(`${origin}/profile?error=spotify_token`);
+      return NextResponse.redirect(`${origin}/profile?error=spotify_no_token_${encodeURIComponent(JSON.stringify(tokens).slice(0, 100))}`);
     }
 
     // Get Spotify user profile
@@ -37,13 +44,14 @@ export async function GET(request: Request) {
     });
     const spotifyProfile = await profileRes.json();
 
-    // Save to platform_connections
+    // Get current user
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.redirect(`${origin}/auth/login`);
     }
 
+    // Save to DB with admin client (bypasses RLS)
     const admin = createAdminClient();
     const { error: dbError } = await admin.from('platform_connections').upsert({
       user_id: user.id,
@@ -62,6 +70,6 @@ export async function GET(request: Request) {
 
     return NextResponse.redirect(`${origin}/profile?connected=spotify`);
   } catch (e: any) {
-    return NextResponse.redirect(`${origin}/profile?error=spotify_catch_${encodeURIComponent(e?.message || 'unknown')}`);
+    return NextResponse.redirect(`${origin}/profile?error=catch_${encodeURIComponent(e?.message || 'unknown')}`);
   }
 }
