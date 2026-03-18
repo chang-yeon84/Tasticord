@@ -1,8 +1,6 @@
 import type { Metadata } from 'next';
 import { Outfit, Noto_Sans_KR } from 'next/font/google';
 import './globals.css';
-import Sidebar from '@/components/layout/Sidebar';
-import MobileNav from '@/components/layout/MobileNav';
 
 const outfit = Outfit({
   subsets: ['latin'],
@@ -22,12 +20,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko" className="dark">
-      <body className={`${outfit.variable} ${notoSansKr.variable} font-sans bg-[#09090b] text-zinc-200 flex h-screen overflow-hidden`}>
-        <Sidebar />
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
-        <MobileNav />
+      <body className={`${outfit.variable} ${notoSansKr.variable} font-sans bg-[#09090b] text-zinc-200`}>
+        {children}
       </body>
     </html>
   );

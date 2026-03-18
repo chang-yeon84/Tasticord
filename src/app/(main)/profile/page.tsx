@@ -18,9 +18,13 @@ export default function ProfilePage() {
     <div className="max-w-3xl mx-auto p-8 animate-fade-up">
       <h2 className="text-2xl font-bold mb-8">프로필</h2>
       <div className="text-center mb-8">
-        <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-yellow-400 to-orange-500 mx-auto mb-4 flex items-center justify-center text-3xl font-bold text-black">
-          {currentUser?.nickname?.slice(0, 1) || '나'}
-        </div>
+        {currentUser?.avatar_url ? (
+          <img src={currentUser.avatar_url} alt={currentUser.nickname} className="w-24 h-24 rounded-full mx-auto mb-4 object-cover" />
+        ) : (
+          <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-yellow-400 to-orange-500 mx-auto mb-4 flex items-center justify-center text-3xl font-bold text-black">
+            {currentUser?.nickname?.slice(0, 1) || '나'}
+          </div>
+        )}
         <div className="text-xl font-bold">{currentUser?.nickname || '내 이름'}</div>
         <div className="text-sm text-zinc-500 mt-1">카카오톡으로 로그인됨</div>
         <div className="flex justify-center gap-8 mt-5">

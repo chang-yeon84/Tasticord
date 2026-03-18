@@ -19,7 +19,21 @@ export function useAuth() {
           .select('*')
           .eq('id', user.id)
           .single();
-        setCurrentUser(profile as Profile);
+
+        if (profile) {
+          setCurrentUser(profile as Profile);
+        } else {
+          // profiles 테이블에 없으면 카카오 메타데이터로 fallback
+          const meta = user.user_metadata;
+          setCurrentUser({
+            id: user.id,
+            kakao_id: null,
+            nickname: meta?.full_name || meta?.name || meta?.preferred_username || '사용자',
+            avatar_url: meta?.avatar_url || meta?.picture || null,
+            created_at: user.created_at,
+            updated_at: user.created_at,
+          });
+        }
       }
       setLoading(false);
     }
