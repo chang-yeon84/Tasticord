@@ -8,9 +8,11 @@ export async function GET(request: Request) {
   const error = searchParams.get('error');
 
   if (error || !code) {
-    return NextResponse.redirect(`${origin}/profile?error=youtube_denied`);
+    return NextResponse.redirect(`${origin}/profile?error=yt_denied`);
   }
 
+  // Step 1: Exchange code for tokens
+  let tokens;
   try {
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
@@ -23,28 +25,47 @@ export async function GET(request: Request) {
         redirect_uri: `${origin}/api/auth/youtube/callback`,
       }),
     });
-
-    const tokens = await tokenRes.json();
+    const text = await tokenRes.text();
+    tokens = JSON.parse(text);
     if (!tokens.access_token) {
-      return NextResponse.redirect(`${origin}/profile?error=youtube_token`);
+      return NextResponse.redirect(`${origin}/profile?error=yt_no_token_${encodeURIComponent(text.slice(0, 100))}`);
     }
+  } catch (e: any) {
+    return NextResponse.redirect(`${origin}/profile?error=yt_step1_${encodeURIComponent(e?.message?.slice(0, 80) || '')}`);
+  }
 
-    // Get YouTube channel info
+  // Step 2: Get YouTube channel info
+  let channel = null;
+  try {
     const channelRes = await fetch('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true', {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
+      cache: 'no-store',
     });
-    const channelData = await channelRes.json();
-    const channel = channelData.items?.[0];
+    const data = await channelRes.json();
+    channel = data.items?.[0] || null;
+  } catch {
+    // Channel info is optional, continue
+  }
 
+  // Step 3: Get current user
+  let userId;
+  try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.redirect(`${origin}/auth/login`);
-    }
+    userId = user?.id;
+  } catch (e: any) {
+    return NextResponse.redirect(`${origin}/profile?error=yt_step3_${encodeURIComponent(e?.message?.slice(0, 80) || '')}`);
+  }
 
+  if (!userId) {
+    return NextResponse.redirect(`${origin}/auth/login`);
+  }
+
+  // Step 4: Save to DB
+  try {
     const admin = createAdminClient();
-    await admin.from('platform_connections').upsert({
-      user_id: user.id,
+    const { error: dbError } = await admin.from('platform_connections').upsert({
+      user_id: userId,
       platform: 'youtube_music',
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token || null,
@@ -54,9 +75,12 @@ export async function GET(request: Request) {
       metadata: {},
     }, { onConflict: 'user_id,platform' });
 
-    return NextResponse.redirect(`${origin}/profile?connected=youtube_music`);
-  } catch (e) {
-    console.error('YouTube OAuth error:', e);
-    return NextResponse.redirect(`${origin}/profile?error=youtube_failed`);
+    if (dbError) {
+      return NextResponse.redirect(`${origin}/profile?error=yt_db_${encodeURIComponent(dbError.message.slice(0, 100))}`);
+    }
+  } catch (e: any) {
+    return NextResponse.redirect(`${origin}/profile?error=yt_step4_${encodeURIComponent(e?.message?.slice(0, 80) || '')}`);
   }
+
+  return NextResponse.redirect(`${origin}/profile?connected=youtube_music`);
 }
