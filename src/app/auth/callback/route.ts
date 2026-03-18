@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -14,8 +15,9 @@ export async function GET(request: Request) {
       const user = data.session.user;
       const providerToken = data.session.provider_token;
 
-      // Upsert profile
-      await supabase.from('profiles').upsert({
+      // Upsert profile (use admin to bypass RLS)
+      const admin = createAdminClient();
+      await admin.from('profiles').upsert({
         id: user.id,
         nickname: user.user_metadata?.full_name || user.user_metadata?.name || user.user_metadata?.preferred_username || '사용자',
         avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
@@ -33,21 +35,20 @@ export async function GET(request: Request) {
             // For each friend, check if they're registered and create friendship
             for (const friend of friendsData.elements || []) {
               // Find if this kakao user is registered
-              const { data: friendProfile } = await supabase
+              const { data: friendProfile } = await admin
                 .from('profiles')
                 .select('id')
                 .eq('kakao_id', friend.id)
                 .single();
 
               if (friendProfile) {
-                // Create bidirectional friendship
-                await supabase.from('friendships').upsert({
+                await admin.from('friendships').upsert({
                   user_id: user.id,
                   friend_id: friendProfile.id,
                   kakao_friend_id: friend.id,
                 }, { onConflict: 'user_id,friend_id' });
 
-                await supabase.from('friendships').upsert({
+                await admin.from('friendships').upsert({
                   user_id: friendProfile.id,
                   friend_id: user.id,
                   kakao_friend_id: null,

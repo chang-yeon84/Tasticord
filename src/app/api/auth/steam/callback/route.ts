@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -32,7 +33,8 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${origin}/auth/login`);
     }
 
-    await supabase.from('platform_connections').upsert({
+    const admin = createAdminClient();
+    await admin.from('platform_connections').upsert({
       user_id: user.id,
       platform: 'steam',
       access_token: null,
