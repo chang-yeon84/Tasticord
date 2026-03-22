@@ -36,6 +36,3 @@ export function getSteamImageUrl(appId: number): string {
   return `https://cdn.cloudflare.steamstatic.com/steam/apps/${appId}/header.jpg`;
 }
 
-export function getTmdbPosterUrl(posterPath: string, size: string = 'w200'): string {
-  return `https://image.tmdb.org/t/p/${size}/${posterPath}`;
-}

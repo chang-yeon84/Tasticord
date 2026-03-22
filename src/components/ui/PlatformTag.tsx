@@ -7,10 +7,8 @@ interface PlatformTagProps {
 const platformColorClasses: Record<string, string> = {
   spotify: 'text-green-400',
   apple_music: 'text-pink-400',
-  youtube_music: 'text-red-500',
   steam: 'text-zinc-400',
   netflix: 'text-red-400',
-  strava: 'text-orange-400',
 };
 
 export default function PlatformTag({ platform }: PlatformTagProps) {

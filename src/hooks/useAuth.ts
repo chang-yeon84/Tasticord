@@ -45,6 +45,7 @@ export function useAuth() {
       provider: 'kakao',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
+        scopes: 'friends',
       },
     });
   };
