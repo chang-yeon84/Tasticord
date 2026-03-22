@@ -5,15 +5,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { createClient } from '@/lib/supabase/client';
 import StatusDot from '@/components/ui/StatusDot';
 import type { PlatformConnection } from '@/types';
-import { PLATFORM_NAMES } from '@/lib/utils/constants';
 
 const allPlatforms = [
   { key: 'spotify', name: 'Spotify', icon: '🎵', bgColor: 'bg-green-600', fullSupport: true },
   { key: 'apple_music', name: 'Apple Music', icon: '🎶', bgColor: 'bg-pink-600', fullSupport: true },
-  { key: 'youtube_music', name: 'YouTube Music', icon: '▶️', bgColor: 'bg-red-600', fullSupport: false },
   { key: 'steam', name: 'Steam', icon: '🎮', bgColor: 'bg-zinc-800', fullSupport: true },
   { key: 'netflix', name: 'Netflix', icon: '🎬', bgColor: 'bg-red-700', fullSupport: false },
-  { key: 'strava', name: 'Strava', icon: '🏃', bgColor: 'bg-orange-600', fullSupport: true },
 ];
 
 export default function ProfilePage() {
@@ -22,16 +19,42 @@ export default function ProfilePage() {
   const [friendCount, setFriendCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
+
   const handleConnect = (platformKey: string) => {
-    if (['spotify', 'youtube_music', 'steam'].includes(platformKey)) {
+    if (['spotify', 'steam'].includes(platformKey)) {
       const routes: Record<string, string> = {
         spotify: '/api/auth/spotify',
-        youtube_music: '/api/auth/youtube',
         steam: '/api/auth/steam',
       };
       window.location.href = routes[platformKey];
     } else {
       alert('준비 중입니다');
+    }
+  };
+
+  // 연동 해제
+  const handleDisconnect = async (platformKey: string, platformName: string) => {
+    if (!confirm(`${platformName} 연동을 해제하시겠습니까?`)) return;
+
+    setDisconnecting(platformKey);
+    try {
+      const res = await fetch('/api/platform/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: platformKey }),
+      });
+
+      if (res.ok) {
+        // 연동 목록에서 제거
+        setConnections(prev => prev.filter(c => c.platform !== platformKey));
+      } else {
+        alert('연동 해제에 실패했습니다');
+      }
+    } catch {
+      alert('연동 해제에 실패했습니다');
+    } finally {
+      setDisconnecting(null);
     }
   };
 
@@ -97,7 +120,16 @@ export default function ProfilePage() {
                 </div>
               </div>
               {isConnected ? (
-                <StatusDot status={p.fullSupport ? 'full' : 'limited'} />
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDisconnect(p.key, p.name);
+                  }}
+                  disabled={disconnecting === p.key}
+                  className="text-xs text-zinc-500 hover:text-red-400 transition px-3 py-1 rounded-lg hover:bg-red-900/20"
+                >
+                  {disconnecting === p.key ? '해제 중...' : '연동 해제'}
+                </button>
               ) : (
                 <span className="text-xs text-zinc-600">연동하기</span>
               )}

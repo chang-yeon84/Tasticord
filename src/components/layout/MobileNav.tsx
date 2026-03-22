@@ -2,10 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Activity, MessageCircle, Users, User } from 'lucide-react';
+import { Home, Heart, Activity, MessageCircle, Users, User } from 'lucide-react';
 
 const navItems = [
   { href: '/', label: '홈', icon: Home },
+  { href: '/my-taste', label: '내 취향', icon: Heart },
   { href: '/analysis', label: '분석', icon: Activity },
   { href: '/messages', label: '메시지', icon: MessageCircle },
   { href: '/friends', label: '친구', icon: Users },

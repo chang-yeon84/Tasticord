@@ -1,5 +1,5 @@
-export type Platform = 'spotify' | 'apple_music' | 'youtube_music' | 'steam' | 'netflix' | 'strava';
-export type ActivityType = 'listening' | 'playing' | 'watching' | 'exercising' | 'liked' | 'playlist_add';
+export type Platform = 'spotify' | 'apple_music' | 'steam' | 'netflix';
+export type ActivityType = 'listening' | 'playing' | 'watching' | 'liked' | 'playlist_add';
 export type ChatType = 'dm' | 'playlist';
 export type EmbedType = 'music' | 'game' | 'movie';
 
@@ -122,7 +122,6 @@ export interface TasteReport {
     tags: string[];
     top_artists?: Array<{ name: string; image_url?: string; play_count?: number }>;
     top_games?: Array<{ name: string; image_url?: string; playtime_hours?: number }>;
-    top_movies?: Array<{ name: string; image_url?: string; rating?: number }>;
   };
   tags: string[];
   generated_at: string;

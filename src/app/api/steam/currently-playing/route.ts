@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { getPlayerSummaries } from '@/lib/api/steam';
+import { getCurrentlyPlaying } from '@/lib/api/steam';
 
 export async function GET() {
   try {
@@ -19,7 +19,8 @@ export async function GET() {
       return NextResponse.json({ error: 'Steam not connected' }, { status: 400 });
     }
 
-    const data = await getPlayerSummaries(connection.platform_user_id);
+    // 현재 플레이 중인 게임은 실시간 데이터라 캐싱하지 않음
+    const data = await getCurrentlyPlaying(connection.platform_user_id);
     return NextResponse.json(data);
   } catch {
     return NextResponse.json({ error: 'Failed to fetch' }, { status: 500 });

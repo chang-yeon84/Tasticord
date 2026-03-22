@@ -42,7 +42,7 @@ export default function FeedCard({ activity }: FeedCardProps) {
         </div>
       </div>
 
-      {['spotify', 'apple_music', 'youtube_music'].includes(activity.platform) && (
+      {['spotify', 'apple_music'].includes(activity.platform) && (
         <MusicEmbed activity={activity} />
       )}
       {activity.platform === 'steam' && <GameEmbed activity={activity} />}
