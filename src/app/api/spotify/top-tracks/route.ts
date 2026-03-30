@@ -31,11 +31,11 @@ export async function GET(request: Request) {
     }
 
     // Spotify API 호출
-    const data = await getTopTracks(token.accessToken, timeRange, 20);
+    const data = await getTopTracks(token.accessToken, timeRange, 50);
     const tracks = (data.items || []).map((t: {
       id: string;
       name: string;
-      artists: { name: string }[];
+      artists: { id: string; name: string }[];
       album: { name: string; images: { url: string }[] };
       duration_ms: number;
       external_urls: { spotify: string };
@@ -43,6 +43,7 @@ export async function GET(request: Request) {
       id: t.id,
       name: t.name,
       artist: t.artists.map((a: { name: string }) => a.name).join(', '),
+      artistId: t.artists[0]?.id || null,
       album: t.album.name,
       image: t.album.images?.[0]?.url || null,
       duration_ms: t.duration_ms,

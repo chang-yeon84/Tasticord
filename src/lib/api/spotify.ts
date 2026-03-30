@@ -40,6 +40,12 @@ export async function getRecentlyPlayed(accessToken: string, limit: number = 20)
   return spotifyFetch(`/me/player/recently-played?limit=${limit}`, accessToken);
 }
 
+// 아티스트 여러 명의 정보 조회 (최대 50명)
+export async function getArtists(accessToken: string, artistIds: string[]) {
+  const ids = artistIds.slice(0, 50).join(',');
+  return spotifyFetch(`/artists?ids=${ids}`, accessToken);
+}
+
 export async function searchTrack(accessToken: string, query: string) {
   return spotifyFetch(`/search?q=${encodeURIComponent(query)}&type=track&limit=10`, accessToken);
 }

@@ -7,8 +7,20 @@ export async function GET(request: NextRequest) {
 
   try {
     const details = await getAppDetails(Number(appid));
-    if (details?.header_image) {
-      return NextResponse.redirect(details.header_image);
+    const imageUrl = details?.header_image || details?.capsule_image || null;
+    if (imageUrl) {
+      // 이미지를 프록시로 직접 전달 (redirect 대신)
+      const imgRes = await fetch(imageUrl);
+      if (imgRes.ok) {
+        const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+        const buffer = await imgRes.arrayBuffer();
+        return new NextResponse(buffer, {
+          headers: {
+            'Content-Type': contentType,
+            'Cache-Control': 'public, max-age=86400',
+          },
+        });
+      }
     }
     return NextResponse.json({ error: 'No image found' }, { status: 404 });
   } catch {
