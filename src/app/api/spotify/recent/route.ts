@@ -1,20 +1,16 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getValidSpotifyToken } from '@/lib/api/spotify-token';
-import { getTopTracks } from '@/lib/api/spotify';
+import { getRecentlyPlayed } from '@/lib/api/spotify';
 
-// 캐시 유효 시간: 6시간
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+// 캐시 유효 시간: 30분
+const CACHE_TTL_MS = 30 * 60 * 1000;
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url);
-    const timeRange = searchParams.get('time_range') || 'medium_term';
-
     const token = await getValidSpotifyToken();
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const cacheKey = `top_tracks_${timeRange}`;
     const admin = createAdminClient();
 
     // 캐시 확인
@@ -23,7 +19,7 @@ export async function GET(request: Request) {
       .select('data, fetched_at')
       .eq('user_id', token.userId)
       .eq('platform', 'spotify')
-      .eq('data_type', cacheKey)
+      .eq('data_type', 'recently_played')
       .maybeSingle();
 
     if (cache && Date.now() - new Date(cache.fetched_at).getTime() < CACHE_TTL_MS) {
@@ -31,22 +27,26 @@ export async function GET(request: Request) {
     }
 
     // Spotify API 호출
-    const data = await getTopTracks(token.accessToken, timeRange, 20);
-    const tracks = (data.items || []).map((t: {
-      id: string;
-      name: string;
-      artists: { name: string }[];
-      album: { name: string; images: { url: string }[] };
-      duration_ms: number;
-      external_urls: { spotify: string };
+    const data = await getRecentlyPlayed(token.accessToken, 20);
+    const tracks = (data.items || []).map((item: {
+      track: {
+        id: string;
+        name: string;
+        artists: { name: string }[];
+        album: { name: string; images: { url: string }[] };
+        duration_ms: number;
+        external_urls: { spotify: string };
+      };
+      played_at: string;
     }) => ({
-      id: t.id,
-      name: t.name,
-      artist: t.artists.map((a: { name: string }) => a.name).join(', '),
-      album: t.album.name,
-      image: t.album.images?.[0]?.url || null,
-      duration_ms: t.duration_ms,
-      url: t.external_urls?.spotify,
+      id: item.track.id,
+      name: item.track.name,
+      artist: item.track.artists.map((a: { name: string }) => a.name).join(', '),
+      album: item.track.album.name,
+      image: item.track.album.images?.[0]?.url || null,
+      duration_ms: item.track.duration_ms,
+      url: item.track.external_urls?.spotify,
+      played_at: item.played_at,
     }));
 
     const cacheData = { tracks };
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
     await admin.from('taste_cache').upsert({
       user_id: token.userId,
       platform: 'spotify',
-      data_type: cacheKey,
+      data_type: 'recently_played',
       data: cacheData,
       fetched_at: new Date().toISOString(),
     }, { onConflict: 'user_id,platform,data_type' });

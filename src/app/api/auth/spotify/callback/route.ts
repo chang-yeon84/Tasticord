@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getSpotifyRedirectUri } from '@/lib/utils/spotify-redirect';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
       body: new URLSearchParams({
         grant_type: 'authorization_code',
         code,
-        redirect_uri: `${origin}/api/auth/spotify/callback`,
+        redirect_uri: getSpotifyRedirectUri(origin),
       }),
     });
     const text = await tokenRes.text();
