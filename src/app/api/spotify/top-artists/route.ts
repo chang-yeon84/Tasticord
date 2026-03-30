@@ -32,11 +32,12 @@ export async function GET(request: Request) {
 
     // Spotify API 호출
     const data = await getTopArtists(token.accessToken, timeRange, 20);
-    const artists = (data.items || []).map((a: { id: string; name: string; images: { url: string }[]; genres: string[]; external_urls: { spotify: string } }) => ({
+    const artists = (data.items || []).map((a: { id: string; name: string; images: { url: string }[]; genres: string[]; followers: { total: number }; external_urls: { spotify: string } }) => ({
       id: a.id,
       name: a.name,
       image: a.images?.[0]?.url || null,
       genres: a.genres || [],
+      followers: a.followers?.total || 0,
       url: a.external_urls?.spotify,
     }));
 
