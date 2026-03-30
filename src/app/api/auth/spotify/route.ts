@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { headers } from 'next/headers';
+import { getSpotifyRedirectUri } from '@/lib/utils/spotify-redirect';
 
 export async function GET() {
   const headersList = await headers();
@@ -11,7 +12,7 @@ export async function GET() {
     response_type: 'code',
     client_id: process.env.SPOTIFY_CLIENT_ID!,
     scope: 'user-read-currently-playing user-top-read user-read-recently-played playlist-modify-public playlist-modify-private',
-    redirect_uri: `${origin}/api/auth/spotify/callback`,
+    redirect_uri: getSpotifyRedirectUri(origin),
     show_dialog: 'true',
   });
 

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(sed -i '/^$/N;/^\\\\n# 앱 기본 URL/d' .env.local)",
+      "Bash(sed -i '/^# 앱 기본 URL/d' .env.local)",
+      "Bash(sed -i '/^NEXT_PUBLIC_BASE_URL/d' .env.local)",
+      "Bash(curl:*)",
+      "WebFetch(domain:store.steampowered.com)",
+      "Bash(npx tsc:*)",
+      "Bash(find /t/tasticord/changyeon_tasticord/src -type f \\\\\\(-name *steam* -o -name *Steam* \\\\\\))",
+      "Bash(xargs grep:*)",
+      "WebSearch"
+    ]
+  }
+}

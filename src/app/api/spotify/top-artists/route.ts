@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getValidSpotifyToken } from '@/lib/api/spotify-token';
-import { getTopTracks } from '@/lib/api/spotify';
+import { getTopArtists } from '@/lib/api/spotify';
 
 // 캐시 유효 시간: 6시간
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const token = await getValidSpotifyToken();
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const cacheKey = `top_tracks_${timeRange}`;
+    const cacheKey = `top_artists_${timeRange}`;
     const admin = createAdminClient();
 
     // 캐시 확인
@@ -31,25 +31,16 @@ export async function GET(request: Request) {
     }
 
     // Spotify API 호출
-    const data = await getTopTracks(token.accessToken, timeRange, 20);
-    const tracks = (data.items || []).map((t: {
-      id: string;
-      name: string;
-      artists: { name: string }[];
-      album: { name: string; images: { url: string }[] };
-      duration_ms: number;
-      external_urls: { spotify: string };
-    }) => ({
-      id: t.id,
-      name: t.name,
-      artist: t.artists.map((a: { name: string }) => a.name).join(', '),
-      album: t.album.name,
-      image: t.album.images?.[0]?.url || null,
-      duration_ms: t.duration_ms,
-      url: t.external_urls?.spotify,
+    const data = await getTopArtists(token.accessToken, timeRange, 20);
+    const artists = (data.items || []).map((a: { id: string; name: string; images: { url: string }[]; genres: string[]; external_urls: { spotify: string } }) => ({
+      id: a.id,
+      name: a.name,
+      image: a.images?.[0]?.url || null,
+      genres: a.genres || [],
+      url: a.external_urls?.spotify,
     }));
 
-    const cacheData = { tracks };
+    const cacheData = { artists };
 
     await admin.from('taste_cache').upsert({
       user_id: token.userId,
