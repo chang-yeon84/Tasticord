@@ -95,6 +95,7 @@ interface CurrentlyPlaying {
   profileName: string;
   avatarUrl: string;
   isProfilePublic: boolean;
+  steamLevel: number | null;
 }
 
 // Spotify 관련 타입
@@ -197,8 +198,8 @@ export default function MyTastePage() {
   const [topArtists, setTopArtists] = useState<SpotifyArtistItem[]>([]);
   const [topTracks, setTopTracks] = useState<SpotifyTrackItem[]>([]);
   const [recentTracks, setRecentTracks] = useState<SpotifyRecentItem[]>([]);
-  const [artistTimeRange, setArtistTimeRange] = useState<'short_term' | 'medium_term' | 'long_term'>('medium_term');
-  const [trackTimeRange, setTrackTimeRange] = useState<'short_term' | 'medium_term' | 'long_term'>('medium_term');
+  const [artistTimeRange, setArtistTimeRange] = useState<'short_term' | 'medium_term' | 'long_term'>('long_term');
+  const [trackTimeRange, setTrackTimeRange] = useState<'short_term' | 'medium_term' | 'long_term'>('long_term');
   const [artistsLoading, setArtistsLoading] = useState(false);
   const [tracksLoading, setTracksLoading] = useState(false);
   const [spotifyGenres, setSpotifyGenres] = useState<SpotifyGenreStat[]>([]);
@@ -337,8 +338,8 @@ export default function MyTastePage() {
       // 현재 재생 중 + Top 아티스트 + Top 트랙 + 최근 재생 병렬 호출
       const [nowRes, artistsRes, tracksRes, recentRes] = await Promise.allSettled([
         fetch('/api/spotify/now-playing'),
-        fetch('/api/spotify/top-artists?time_range=medium_term'),
-        fetch('/api/spotify/top-tracks?time_range=medium_term'),
+        fetch('/api/spotify/top-artists?time_range=long_term'),
+        fetch('/api/spotify/top-tracks?time_range=long_term'),
         fetch('/api/spotify/recent'),
       ]);
 
@@ -431,11 +432,10 @@ export default function MyTastePage() {
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition ${
-              activeTab === key
-                ? 'bg-white text-black'
-                : 'bg-zinc-900/50 border border-zinc-800/35 text-zinc-400 hover:text-zinc-200'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition ${activeTab === key
+              ? 'bg-white text-black'
+              : 'bg-zinc-900/50 border border-zinc-800/35 text-zinc-400 hover:text-zinc-200'
+              }`}
           >
             <Icon className="w-4 h-4" />
             {label}
@@ -445,632 +445,657 @@ export default function MyTastePage() {
 
       {/* 게임 탭 */}
       {activeTab === 'game' && (
-      <div className="mb-10">
+        <div className="mb-10">
 
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-6 h-6 text-zinc-500 animate-spin" />
-          </div>
-        ) : !steamConnected ? (
-          <div className="text-center py-16 bg-zinc-900/50 border border-zinc-800/35 rounded-2xl">
-            <Gamepad2 className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-            <p className="text-zinc-500">Steam이 연동되지 않았습니다</p>
-            <a
-              href="/api/auth/steam"
-              className="inline-block mt-4 px-6 py-2 text-sm bg-zinc-800 hover:bg-zinc-700 rounded-lg transition"
-            >
-              Steam 연동하기
-            </a>
-          </div>
-        ) : steamProfilePublic === false ? (
-          <div className="text-center py-16 bg-zinc-900/50 border border-zinc-800/35 rounded-2xl">
-            <ShieldAlert className="w-10 h-10 text-yellow-500/70 mx-auto mb-3" />
-            <p className="text-zinc-300 font-medium">Steam 프로필이 비공개 상태입니다</p>
-            <p className="text-sm text-zinc-500 mt-2 max-w-sm mx-auto">
-              게임 정보를 불러오려면 Steam 프로필 공개 설정을 <span className="text-zinc-300">공개</span>로 변경해주세요
-            </p>
-            <a
-              href="https://steamcommunity.com/my/edit/settings"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block mt-5 px-6 py-2 text-sm bg-zinc-800 hover:bg-zinc-700 rounded-lg transition"
-            >
-              Steam 설정으로 이동 ↗
-            </a>
-          </div>
-        ) : (
-          <>
-            {/* 현재 플레이 중 */}
-            {currentlyPlaying?.isPlaying && (
-              <div className="mb-6 bg-gradient-to-r from-green-900/30 to-emerald-900/20 border border-green-800/30 rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                  <span className="text-xs font-bold text-green-400 uppercase tracking-wider">현재 플레이 중</span>
-                </div>
-                <div className="flex items-center gap-4">
-                  {currentlyPlaying.gameId && (
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-6 h-6 text-zinc-500 animate-spin" />
+            </div>
+          ) : !steamConnected ? (
+            <div className="text-center py-16 bg-zinc-900/50 border border-zinc-800/35 rounded-2xl">
+              <Gamepad2 className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+              <p className="text-zinc-500">Steam이 연동되지 않았습니다</p>
+              <a
+                href="/api/auth/steam"
+                className="inline-block mt-4 px-6 py-2 text-sm bg-zinc-800 hover:bg-zinc-700 rounded-lg transition"
+              >
+                Steam 연동하기
+              </a>
+            </div>
+          ) : steamProfilePublic === false ? (
+            <div className="text-center py-16 bg-zinc-900/50 border border-zinc-800/35 rounded-2xl">
+              <ShieldAlert className="w-10 h-10 text-yellow-500/70 mx-auto mb-3" />
+              <p className="text-zinc-300 font-medium">Steam 프로필이 비공개 상태입니다</p>
+              <p className="text-sm text-zinc-500 mt-2 max-w-sm mx-auto">
+                게임 정보를 불러오려면 Steam 프로필 공개 설정을 <span className="text-zinc-300">공개</span>로 변경해주세요
+              </p>
+              <a
+                href="https://steamcommunity.com/my/edit/settings"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-5 px-6 py-2 text-sm bg-zinc-800 hover:bg-zinc-700 rounded-lg transition"
+              >
+                Steam 설정으로 이동 ↗
+              </a>
+            </div>
+          ) : (
+            <>
+              {/* Steam 프로필 */}
+              {currentlyPlaying && (
+                <div className="mb-4 flex items-center gap-3">
+                  {currentlyPlaying.avatarUrl && (
                     <img
-                      src={getSteamHeaderUrl(Number(currentlyPlaying.gameId))}
-                      alt={currentlyPlaying.gameName || ''}
-                      className="w-40 h-[75px] rounded-lg object-cover"
-                      onError={(e) => handleImgError(e)}
+                      src={currentlyPlaying.avatarUrl}
+                      alt={currentlyPlaying.profileName}
+                      className="w-8 h-8 rounded-full"
                     />
                   )}
-                  <div>
-                    <p className="text-lg font-bold">{currentlyPlaying.gameName}</p>
-                    <a
-                      href={`https://store.steampowered.com/app/${currentlyPlaying.gameId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-zinc-400 hover:text-white transition"
-                    >
-                      Steam에서 보기 ↗
-                    </a>
+                  <span className="text-sm font-medium text-zinc-300">{currentlyPlaying.profileName}</span>
+                  {currentlyPlaying.steamLevel != null && (
+                    <span className="text-xs text-zinc-500 bg-zinc-800/60 px-2 py-0.5 rounded-full">Lv. {currentlyPlaying.steamLevel}</span>
+                  )}
+                </div>
+              )}
+
+              {/* 현재 플레이 중 */}
+              {currentlyPlaying?.isPlaying ? (
+                <div className="mb-6 bg-gradient-to-r from-green-900/30 to-emerald-900/20 border border-green-800/30 rounded-2xl p-5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                    <span className="text-xs font-bold text-green-400 uppercase tracking-wider">현재 플레이 중</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    {currentlyPlaying.gameId && (
+                      <img
+                        src={getSteamHeaderUrl(Number(currentlyPlaying.gameId))}
+                        alt={currentlyPlaying.gameName || ''}
+                        className="w-40 h-[75px] rounded-lg object-cover"
+                        onError={(e) => handleImgError(e)}
+                      />
+                    )}
+                    <div>
+                      <p className="text-lg font-bold">{currentlyPlaying.gameName}</p>
+                      <a
+                        href={`https://store.steampowered.com/app/${currentlyPlaying.gameId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-zinc-400 hover:text-white transition"
+                      >
+                        Steam에서 보기 ↗
+                      </a>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* 통계 요약 */}
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-4 text-center">
-                <Gamepad2 className="w-5 h-5 text-zinc-500 mx-auto mb-2" />
-                <div className="text-xl font-bold">{gameCount}</div>
-                <div className="text-xs text-zinc-500">보유 게임</div>
-              </div>
-              <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-4 text-center">
-                <Clock className="w-5 h-5 text-zinc-500 mx-auto mb-2" />
-                <div className="text-xl font-bold">{formatMinutes(totalPlaytime)}</div>
-                <div className="text-xs text-zinc-500">총 플레이타임</div>
-              </div>
-              <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-4 text-center">
-                <Trophy className="w-5 h-5 text-zinc-500 mx-auto mb-2" />
-                <div className="text-xl font-bold">
-                  {formatMinutes(recentGames.reduce((sum, g) => sum + g.playtime_2weeks, 0))}
+              ) : (
+                <div className="mb-6 flex items-center gap-2 px-4 py-3 rounded-xl border border-zinc-800/40 bg-zinc-900/30">
+                  <Gamepad2 className="w-4 h-4 text-zinc-600" />
+                  <span className="text-sm text-zinc-500">현재 플레이 중인 게임이 없습니다</span>
                 </div>
-                <div className="text-xs text-zinc-500">최근 2주 플레이</div>
-              </div>
-            </div>
+              )}
 
-            {/* 요즘 많이 플레이한 장르 */}
-            {genresLoading ? (
-              <div className="mb-8">
-                <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-6 flex items-center justify-center">
-                  <Loader2 className="w-5 h-5 text-zinc-500 animate-spin mr-2" />
-                  <span className="text-sm text-zinc-500">장르 분석 중...</span>
+              {/* 통계 요약 */}
+              <div className="grid grid-cols-3 gap-3 mb-6">
+                <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-4 text-center">
+                  <Gamepad2 className="w-5 h-5 text-zinc-500 mx-auto mb-2" />
+                  <div className="text-xl font-bold">{gameCount}</div>
+                  <div className="text-xs text-zinc-500">보유 게임</div>
+                </div>
+                <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-4 text-center">
+                  <Clock className="w-5 h-5 text-zinc-500 mx-auto mb-2" />
+                  <div className="text-xl font-bold">{formatMinutes(totalPlaytime)}</div>
+                  <div className="text-xs text-zinc-500">총 플레이타임</div>
+                </div>
+                <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-4 text-center">
+                  <Trophy className="w-5 h-5 text-zinc-500 mx-auto mb-2" />
+                  <div className="text-xl font-bold">
+                    {formatMinutes(recentGames.reduce((sum, g) => sum + g.playtime_2weeks, 0))}
+                  </div>
+                  <div className="text-xs text-zinc-500">최근 2주 플레이</div>
                 </div>
               </div>
-            ) : genres.length > 0 && (
-              <div className="mb-8">
-                <p className="text-sm text-zinc-400 mb-3">요즘 이런 장르를 많이 플레이했어요</p>
-                <div className="flex flex-wrap gap-2">
-                  {genres.slice(0, 5).map((genre) => {
-                    const colorClass = GENRE_COLORS[genre.name] || 'bg-zinc-500';
-                    return (
-                      <span
-                        key={genre.name}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900/50 border border-zinc-800/35 rounded-full"
+
+              {/* 요즘 많이 플레이한 장르 */}
+              {genresLoading ? (
+                <div className="mb-8">
+                  <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-6 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 text-zinc-500 animate-spin mr-2" />
+                    <span className="text-sm text-zinc-500">장르 분석 중...</span>
+                  </div>
+                </div>
+              ) : genres.length > 0 && (
+                <div className="mb-8">
+                  <p className="text-sm text-zinc-400 mb-3">요즘 이런 장르를 많이 플레이했어요</p>
+                  <div className="flex flex-wrap gap-2">
+                    {genres.slice(0, 5).map((genre) => {
+                      const colorClass = GENRE_COLORS[genre.name] || 'bg-zinc-500';
+                      return (
+                        <span
+                          key={genre.name}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-zinc-900/50 border border-zinc-800/35 rounded-full"
+                        >
+                          <span className={`w-2 h-2 rounded-full ${colorClass}`} />
+                          <span className="text-sm font-medium">{genre.name}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 최근 달성한 도전과제 */}
+              {achievementsLoading ? (
+                <div className="mb-8">
+                  <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">최근 달성한 도전과제 <span className="text-zinc-600 normal-case font-normal">(🌍 전체 플레이어 대비 비율)</span></h4>
+                  <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-6 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 text-zinc-500 animate-spin mr-2" />
+                    <span className="text-sm text-zinc-500">도전과제 불러오는 중...</span>
+                  </div>
+                </div>
+              ) : achievements.length > 0 && (
+                <div className="mb-8">
+                  <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">최근 달성한 도전과제 <span className="text-zinc-600 normal-case font-normal">(🌍 전체 플레이어 대비 비율)</span></h4>
+                  <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
+                    {achievements.map((ach, idx) => (
+                      <div
+                        key={`${ach.appid}-${ach.name}-${idx}`}
+                        className="flex-shrink-0 w-[140px] bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-3 flex flex-col items-center text-center"
                       >
-                        <span className={`w-2 h-2 rounded-full ${colorClass}`} />
-                        <span className="text-sm font-medium">{genre.name}</span>
-                      </span>
-                    );
-                  })}
+                        {ach.icon ? (
+                          <img
+                            src={ach.icon}
+                            alt={ach.name}
+                            className="w-12 h-12 rounded-lg mb-2"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg mb-2 bg-zinc-800 flex items-center justify-center">
+                            <Trophy className="w-5 h-5 text-zinc-600" />
+                          </div>
+                        )}
+                        <p className="text-xs font-semibold truncate w-full">{ach.name}</p>
+                        <p className="text-[10px] text-zinc-500 truncate w-full mt-0.5">{ach.gameName}</p>
+                        {ach.globalPercent != null && (
+                          <p className={`text-[10px] font-medium mt-1 ${Number(ach.globalPercent) < 10 ? 'text-yellow-400' : 'text-zinc-500'}`}>
+                            {Number(ach.globalPercent).toFixed(1)}%
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* 최근 달성한 도전과제 */}
-            {achievementsLoading ? (
-              <div className="mb-8">
-                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">최근 달성한 도전과제 <span className="text-zinc-600 normal-case font-normal">(🌍 전체 플레이어 대비 비율)</span></h4>
-                <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-6 flex items-center justify-center">
-                  <Loader2 className="w-5 h-5 text-zinc-500 animate-spin mr-2" />
-                  <span className="text-sm text-zinc-500">도전과제 불러오는 중...</span>
-                </div>
-              </div>
-            ) : achievements.length > 0 && (
-              <div className="mb-8">
-                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">최근 달성한 도전과제 <span className="text-zinc-600 normal-case font-normal">(🌍 전체 플레이어 대비 비율)</span></h4>
-                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
-                  {achievements.map((ach, idx) => (
-                    <div
-                      key={`${ach.appid}-${ach.name}-${idx}`}
-                      className="flex-shrink-0 w-[140px] bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-3 flex flex-col items-center text-center"
-                    >
-                      {ach.icon ? (
-                        <img
-                          src={ach.icon}
-                          alt={ach.name}
-                          className="w-12 h-12 rounded-lg mb-2"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-lg mb-2 bg-zinc-800 flex items-center justify-center">
-                          <Trophy className="w-5 h-5 text-zinc-600" />
+              {/* 최근에 많이 플레이한 게임 */}
+              {recentGames.length > 0 && (
+                <>
+                  <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">최근에 많이 플레이한 게임</h4>
+                  <div className="grid grid-cols-3 gap-3 mb-8">
+                    {recentGames.slice(0, 3).map((game) => (
+                      <a
+                        key={game.appid}
+                        href={`https://store.steampowered.com/app/${game.appid}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group"
+                      >
+                        <div className="relative rounded-xl overflow-hidden aspect-[16/9] bg-zinc-800">
+                          <img
+                            src={getSteamHeaderUrl(game.appid)}
+                            alt={game.name}
+                            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                            onError={(e) => handleImgError(e)}
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                          <div className="absolute bottom-2 left-3 right-3 z-10">
+                            <p className="text-xs font-semibold truncate">{game.name}</p>
+                            <p className="text-[10px] text-purple-400 font-medium mt-0.5">
+                              최근 {formatMinutes(game.playtime_2weeks)}
+                            </p>
+                          </div>
                         </div>
-                      )}
-                      <p className="text-xs font-semibold truncate w-full">{ach.name}</p>
-                      <p className="text-[10px] text-zinc-500 truncate w-full mt-0.5">{ach.gameName}</p>
-                      {ach.globalPercent != null && (
-                        <p className={`text-[10px] font-medium mt-1 ${Number(ach.globalPercent) < 10 ? 'text-yellow-400' : 'text-zinc-500'}`}>
-                          {Number(ach.globalPercent).toFixed(1)}%
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                      </a>
+                    ))}
+                  </div>
+                </>
+              )}
 
-            {/* 최근에 많이 플레이한 게임 */}
-            {recentGames.length > 0 && (
-              <>
-                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">최근에 많이 플레이한 게임</h4>
-                <div className="grid grid-cols-3 gap-3 mb-8">
-                  {recentGames.slice(0, 3).map((game) => (
-                    <a
-                      key={game.appid}
-                      href={`https://store.steampowered.com/app/${game.appid}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group"
-                    >
-                      <div className="relative rounded-xl overflow-hidden aspect-[16/9] bg-zinc-800">
+              {/* 게임 목록 (플레이타임 순) */}
+              <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">전체 플레이타임 순</h4>
+              {(() => {
+                const playedGames = ownedGames.filter(g => g.playtime_minutes > 0);
+                const visibleGames = showAll ? playedGames : playedGames.slice(0, 10);
+                const hasMore = playedGames.length > 10;
+
+                return (
+                  <div className="space-y-2">
+                    {visibleGames.map((game, idx) => (
+                      <a
+                        key={game.appid}
+                        href={`https://store.steampowered.com/app/${game.appid}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-3 flex items-center gap-4 hover:bg-zinc-800/50 transition group"
+                      >
+                        {/* 순위 */}
+                        <span className={`text-sm font-bold w-6 text-center ${idx < 3 ? 'text-yellow-400' : 'text-zinc-600'}`}>
+                          {idx + 1}
+                        </span>
+
+                        {/* 게임 이미지 */}
                         <img
                           src={getSteamHeaderUrl(game.appid)}
                           alt={game.name}
-                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                          className="w-[120px] h-[45px] rounded-lg object-cover flex-shrink-0 bg-zinc-800"
                           onError={(e) => handleImgError(e)}
                         />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
-                        <div className="absolute bottom-2 left-3 right-3 z-10">
-                          <p className="text-xs font-semibold truncate">{game.name}</p>
-                          <p className="text-[10px] text-purple-400 font-medium mt-0.5">
-                            최근 {formatMinutes(game.playtime_2weeks)}
+
+                        {/* 게임 정보 */}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate group-hover:text-white transition">
+                            {game.name}
                           </p>
                         </div>
+
+                        {/* 플레이타임 */}
+                        <div className="text-right flex-shrink-0">
+                          <span className="text-sm font-semibold text-zinc-300">
+                            {formatMinutes(game.playtime_minutes)}
+                          </span>
+                        </div>
+                      </a>
+                    ))}
+
+                    {/* 더보기 / 접기 버튼 */}
+                    {hasMore && (
+                      <button
+                        onClick={() => setShowAll(!showAll)}
+                        className="w-full py-3 text-sm text-zinc-500 hover:text-zinc-300 transition border border-zinc-800/35 rounded-xl hover:bg-zinc-800/30"
+                      >
+                        {showAll ? '접기' : `더보기 (${playedGames.length - 10}개)`}
+                      </button>
+                    )}
+
+                    {/* 미플레이 게임 */}
+                    {ownedGames.filter(g => g.playtime_minutes === 0).length > 0 && (
+                      <div className="text-center py-4 text-xs text-zinc-600">
+                        + 미플레이 게임 {ownedGames.filter(g => g.playtime_minutes === 0).length}개
                       </div>
-                    </a>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {/* 게임 목록 (플레이타임 순) */}
-            <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">전체 플레이타임 순</h4>
-            {(() => {
-              const playedGames = ownedGames.filter(g => g.playtime_minutes > 0);
-              const visibleGames = showAll ? playedGames : playedGames.slice(0, 10);
-              const hasMore = playedGames.length > 10;
-
-              return (
-                <div className="space-y-2">
-                  {visibleGames.map((game, idx) => (
-                    <a
-                      key={game.appid}
-                      href={`https://store.steampowered.com/app/${game.appid}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-3 flex items-center gap-4 hover:bg-zinc-800/50 transition group"
-                    >
-                      {/* 순위 */}
-                      <span className={`text-sm font-bold w-6 text-center ${idx < 3 ? 'text-yellow-400' : 'text-zinc-600'}`}>
-                        {idx + 1}
-                      </span>
-
-                      {/* 게임 이미지 */}
-                      <img
-                        src={getSteamHeaderUrl(game.appid)}
-                        alt={game.name}
-                        className="w-[120px] h-[45px] rounded-lg object-cover flex-shrink-0 bg-zinc-800"
-                        onError={(e) => handleImgError(e)}
-                      />
-
-                      {/* 게임 정보 */}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate group-hover:text-white transition">
-                          {game.name}
-                        </p>
-                      </div>
-
-                      {/* 플레이타임 */}
-                      <div className="text-right flex-shrink-0">
-                        <span className="text-sm font-semibold text-zinc-300">
-                          {formatMinutes(game.playtime_minutes)}
-                        </span>
-                      </div>
-                    </a>
-                  ))}
-
-                  {/* 더보기 / 접기 버튼 */}
-                  {hasMore && (
-                    <button
-                      onClick={() => setShowAll(!showAll)}
-                      className="w-full py-3 text-sm text-zinc-500 hover:text-zinc-300 transition border border-zinc-800/35 rounded-xl hover:bg-zinc-800/30"
-                    >
-                      {showAll ? '접기' : `더보기 (${playedGames.length - 10}개)`}
-                    </button>
-                  )}
-
-                  {/* 미플레이 게임 */}
-                  {ownedGames.filter(g => g.playtime_minutes === 0).length > 0 && (
-                    <div className="text-center py-4 text-xs text-zinc-600">
-                      + 미플레이 게임 {ownedGames.filter(g => g.playtime_minutes === 0).length}개
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </>
-        )}
-      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </>
+          )}
+        </div>
       )}
 
       {/* 음악 탭 */}
       {/* 음악 탭 */}
       {activeTab === 'music' && (
-      <div className="mb-10">
-        {musicLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-6 h-6 text-zinc-500 animate-spin" />
-          </div>
-        ) : !spotifyConnected ? (
-          <div className="text-center py-16 bg-zinc-900/50 border border-zinc-800/35 rounded-2xl">
-            <Music className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-            <p className="text-zinc-500">Spotify가 연동되지 않았습니다</p>
-            <a
-              href="/api/auth/spotify"
-              className="inline-block mt-4 px-6 py-2 text-sm bg-green-600 hover:bg-green-500 rounded-lg transition"
-            >
-              Spotify 연동하기
-            </a>
-          </div>
-        ) : (
-          <>
-            {/* 현재 재생 중 */}
-            {nowPlaying?.is_playing && nowPlaying.item && (
-              <div className="mb-6 bg-gradient-to-r from-green-900/30 to-emerald-900/20 border border-green-800/30 rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                  <span className="text-xs font-bold text-green-400 uppercase tracking-wider">현재 재생 중</span>
-                </div>
-                <div className="flex items-center gap-4">
-                  {nowPlaying.item.album.images?.[0]?.url && (
-                    <img
-                      src={nowPlaying.item.album.images[0].url}
-                      alt={nowPlaying.item.album.name}
-                      className="w-16 h-16 rounded-lg object-cover"
-                    />
-                  )}
-                  <div className="min-w-0">
-                    <p className="text-lg font-bold truncate">{nowPlaying.item.name}</p>
-                    <p className="text-sm text-zinc-400 truncate">
-                      {nowPlaying.item.artists.map(a => a.name).join(', ')}
-                    </p>
-                    <a
-                      href={nowPlaying.item.external_urls?.spotify}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-zinc-400 hover:text-green-400 transition"
-                    >
-                      Spotify에서 듣기 ↗
-                    </a>
+        <div className="mb-10">
+          {musicLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-6 h-6 text-zinc-500 animate-spin" />
+            </div>
+          ) : !spotifyConnected ? (
+            <div className="text-center py-16 bg-zinc-900/50 border border-zinc-800/35 rounded-2xl">
+              <Music className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+              <p className="text-zinc-500">Spotify가 연동되지 않았습니다</p>
+              <a
+                href="/api/auth/spotify"
+                className="inline-block mt-4 px-6 py-2 text-sm bg-green-600 hover:bg-green-500 rounded-lg transition"
+              >
+                Spotify 연동하기
+              </a>
+            </div>
+          ) : (
+            <>
+              {/* 현재 재생 중 */}
+              {nowPlaying?.is_playing && nowPlaying.item ? (
+                <div className="mb-6 bg-gradient-to-r from-green-900/30 to-emerald-900/20 border border-green-800/30 rounded-2xl p-5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                    <span className="text-xs font-bold text-green-400 uppercase tracking-wider">현재 재생 중</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    {nowPlaying.item.album.images?.[0]?.url && (
+                      <img
+                        src={nowPlaying.item.album.images[0].url}
+                        alt={nowPlaying.item.album.name}
+                        className="w-16 h-16 rounded-lg object-cover"
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-lg font-bold truncate">{nowPlaying.item.name}</p>
+                      <p className="text-sm text-zinc-400 truncate">
+                        {nowPlaying.item.artists.map(a => a.name).join(', ')}
+                      </p>
+                      <a
+                        href={nowPlaying.item.external_urls?.spotify}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-zinc-400 hover:text-green-400 transition"
+                      >
+                        Spotify에서 듣기 ↗
+                      </a>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="mb-6 flex items-center gap-2 px-4 py-3 rounded-xl border border-zinc-800/40 bg-zinc-900/30">
+                  <Music className="w-4 h-4 text-zinc-600" />
+                  <span className="text-sm text-zinc-500">현재 재생 중인 노래가 없습니다</span>
+                </div>
+              )}
 
-            {/* 장르 뱃지 (Last.fm 기반, 최근 4주 Top Tracks 분석) */}
-            {spotifyGenresLoading ? (
-              <div className="mb-8">
-                <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-6 flex items-center justify-center">
-                  <Loader2 className="w-5 h-5 text-zinc-500 animate-spin mr-2" />
-                  <span className="text-sm text-zinc-500">음악 장르 분석 중...</span>
+              {/* 장르 뱃지 (Last.fm 기반, 최근 4주 Top Tracks 분석) */}
+              {spotifyGenresLoading ? (
+                <div className="mb-8">
+                  <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-6 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 text-zinc-500 animate-spin mr-2" />
+                    <span className="text-sm text-zinc-500">음악 장르 분석 중...</span>
+                  </div>
                 </div>
-              </div>
-            ) : spotifyGenres.length > 0 && (
-              <div className="mb-8">
-                <p className="text-sm text-zinc-400 mb-3">최근 4주간 이런 장르를 많이 들었어요</p>
-                <div className="flex flex-wrap gap-2">
-                  {spotifyGenres.slice(0, 5).map((genre, idx) => {
-                    const badgeStyles = [
-                      'bg-green-500/15 border-green-500/30 text-green-400',
-                      'bg-emerald-500/15 border-emerald-500/30 text-emerald-400',
-                      'bg-teal-500/15 border-teal-500/30 text-teal-400',
-                      'bg-cyan-500/15 border-cyan-500/30 text-cyan-400',
-                      'bg-zinc-500/15 border-zinc-500/30 text-zinc-400',
-                    ];
-                    return (
-                      <span
-                        key={genre.name}
-                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border capitalize ${badgeStyles[idx]}`}
-                      >
-                        {genre.name}
-                      </span>
-                    );
-                  })}
+              ) : spotifyGenres.length > 0 && (
+                <div className="mb-8">
+                  <p className="text-sm text-zinc-400 mb-3">최근 4주간 이런 장르를 많이 들었어요</p>
+                  <div className="flex flex-wrap gap-2">
+                    {spotifyGenres.slice(0, 5).map((genre, idx) => {
+                      const badgeStyles = [
+                        'bg-green-500/15 border-green-500/30 text-green-400',
+                        'bg-emerald-500/15 border-emerald-500/30 text-emerald-400',
+                        'bg-teal-500/15 border-teal-500/30 text-teal-400',
+                        'bg-cyan-500/15 border-cyan-500/30 text-cyan-400',
+                        'bg-zinc-500/15 border-zinc-500/30 text-zinc-400',
+                      ];
+                      return (
+                        <span
+                          key={genre.name}
+                          className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border capitalize ${badgeStyles[idx]}`}
+                        >
+                          {genre.name}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* 희귀도 분석 */}
-            {rarityLoading ? (
-              <div className="mb-8">
-                <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-6 flex items-center justify-center">
-                  <Loader2 className="w-5 h-5 text-zinc-500 animate-spin mr-2" />
-                  <span className="text-sm text-zinc-500">희귀도 분석 중...</span>
+              {/* 희귀도 분석 */}
+              {rarityLoading ? (
+                <div className="mb-8">
+                  <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-6 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 text-zinc-500 animate-spin mr-2" />
+                    <span className="text-sm text-zinc-500">희귀도 분석 중...</span>
+                  </div>
                 </div>
-              </div>
-            ) : rarity && rarity.tracks.length > 0 && (
-              <div className="mb-8">
-                <div className="flex items-center gap-2 mb-3">
-                  <Disc3 className="w-4 h-4 text-zinc-400" />
-                  <p className="text-sm text-zinc-400">최근 4주간 들은 곡의 희귀도</p>
-                </div>
+              ) : rarity && rarity.tracks.length > 0 && (
+                <div className="mb-8">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Disc3 className="w-4 h-4 text-zinc-400" />
+                    <p className="text-sm text-zinc-400">최근 4주간 들은 곡의 희귀도</p>
+                  </div>
 
-                {/* 평균 희귀도 요약 */}
-                {rarity.summary && (
-                  <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-5 mb-3">
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <p className="text-xs text-zinc-500 mb-1">나의 평균 희귀도</p>
-                        <div className="flex items-center gap-3">
-                          <span
-                            className="text-3xl font-black"
-                            style={{ color: rarity.summary.color }}
-                          >
-                            {rarity.summary.grade}
-                          </span>
-                          <div>
-                            <p className="text-sm font-semibold" style={{ color: rarity.summary.color }}>
-                              {rarity.summary.label}
-                            </p>
-                            <p className="text-xs text-zinc-500">{rarity.averageScore}점 / 100</p>
+                  {/* 평균 희귀도 요약 */}
+                  {rarity.summary && (
+                    <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-5 mb-3">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <p className="text-xs text-zinc-500 mb-1">나의 평균 희귀도</p>
+                          <div className="flex items-center gap-3">
+                            <span
+                              className="text-3xl font-black"
+                              style={{ color: rarity.summary.color }}
+                            >
+                              {rarity.summary.grade}
+                            </span>
+                            <div>
+                              <p className="text-sm font-semibold" style={{ color: rarity.summary.color }}>
+                                {rarity.summary.label}
+                              </p>
+                              <p className="text-xs text-zinc-500">{rarity.averageScore}점 / 100</p>
+                            </div>
                           </div>
                         </div>
+                        {/* 등급 분포 */}
+                        <div className="flex gap-2">
+                          {(['SS', 'S', 'A', 'B', 'C'] as const).map(g => {
+                            const count = rarity.gradeDistribution[g] || 0;
+                            if (count === 0) return null;
+                            const colors: Record<string, string> = {
+                              SS: 'text-yellow-400', S: 'text-purple-400',
+                              A: 'text-blue-400', B: 'text-emerald-400', C: 'text-zinc-400',
+                            };
+                            return (
+                              <div key={g} className="text-center">
+                                <p className={`text-xs font-bold ${colors[g]}`}>{g}</p>
+                                <p className="text-sm font-semibold">{count}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                      {/* 등급 분포 */}
-                      <div className="flex gap-2">
+
+                      {/* 희귀도 바 */}
+                      <div className="w-full h-3 bg-zinc-800 rounded-full overflow-hidden flex">
                         {(['SS', 'S', 'A', 'B', 'C'] as const).map(g => {
                           const count = rarity.gradeDistribution[g] || 0;
-                          if (count === 0) return null;
-                          const colors: Record<string, string> = {
-                            SS: 'text-yellow-400', S: 'text-purple-400',
-                            A: 'text-blue-400', B: 'text-emerald-400', C: 'text-zinc-400',
+                          const pct = (count / rarity.tracks.length) * 100;
+                          if (pct === 0) return null;
+                          const bgColors: Record<string, string> = {
+                            SS: 'bg-yellow-400', S: 'bg-purple-400',
+                            A: 'bg-blue-400', B: 'bg-emerald-400', C: 'bg-zinc-500',
                           };
                           return (
-                            <div key={g} className="text-center">
-                              <p className={`text-xs font-bold ${colors[g]}`}>{g}</p>
-                              <p className="text-sm font-semibold">{count}</p>
-                            </div>
+                            <div
+                              key={g}
+                              className={`h-full ${bgColors[g]} transition-all duration-500`}
+                              style={{ width: `${pct}%` }}
+                            />
                           );
                         })}
                       </div>
                     </div>
+                  )}
 
-                    {/* 희귀도 바 */}
-                    <div className="w-full h-3 bg-zinc-800 rounded-full overflow-hidden flex">
-                      {(['SS', 'S', 'A', 'B', 'C'] as const).map(g => {
-                        const count = rarity.gradeDistribution[g] || 0;
-                        const pct = (count / rarity.tracks.length) * 100;
-                        if (pct === 0) return null;
-                        const bgColors: Record<string, string> = {
-                          SS: 'bg-yellow-400', S: 'bg-purple-400',
-                          A: 'bg-blue-400', B: 'bg-emerald-400', C: 'bg-zinc-500',
-                        };
-                        return (
-                          <div
-                            key={g}
-                            className={`h-full ${bgColors[g]} transition-all duration-500`}
-                            style={{ width: `${pct}%` }}
-                          />
-                        );
-                      })}
+                  {/* 가장 희귀한 곡 Top 5 */}
+                  <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-5">
+                    <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">가장 희귀한 곡</p>
+                    <div className="space-y-2">
+                      {rarity.tracks.slice(0, 5).map((track, idx) => (
+                        <a
+                          key={track.id}
+                          href={track.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-3 p-2 rounded-lg hover:bg-zinc-800/50 transition group"
+                        >
+                          <span
+                            className="text-xs font-black w-8 text-center"
+                            style={{ color: track.color }}
+                          >
+                            {track.grade}
+                          </span>
+                          {track.image && (
+                            <img
+                              src={track.image}
+                              alt={track.name}
+                              className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-zinc-800"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate group-hover:text-green-400 transition">
+                              {track.name}
+                            </p>
+                            <p className="text-xs text-zinc-500 truncate">{track.artist}</p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-xs font-semibold" style={{ color: track.color }}>
+                              {track.rarityScore}점
+                            </p>
+                            <p className="text-[10px] text-zinc-600">{track.label}</p>
+                          </div>
+                        </a>
+                      ))}
                     </div>
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* 가장 희귀한 곡 Top 5 */}
-                <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-5">
-                  <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">가장 희귀한 곡</p>
+              {/* Top 아티스트 */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Top 아티스트</h4>
+                  <div className="flex gap-1">
+                    {(['short_term', 'medium_term', 'long_term'] as const).map(range => (
+                      <button
+                        key={range}
+                        onClick={() => setArtistTimeRange(range)}
+                        className={`px-3 py-1 text-xs rounded-full transition ${artistTimeRange === range
+                          ? 'bg-green-600 text-white'
+                          : 'bg-zinc-800/50 text-zinc-500 hover:text-zinc-300'
+                          }`}
+                      >
+                        {TIME_RANGE_LABELS[range]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {artistsLoading ? (
+                  <div className="flex items-center justify-center py-10">
+                    <Loader2 className="w-5 h-5 text-zinc-500 animate-spin" />
+                  </div>
+                ) : topArtists.length > 0 ? (
+                  <div className="grid grid-cols-4 gap-3">
+                    {topArtists.slice(0, 8).map((artist, idx) => (
+                      <a
+                        key={artist.id}
+                        href={artist.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group text-center"
+                      >
+                        <div className="relative mb-2">
+                          {artist.image ? (
+                            <img
+                              src={artist.image}
+                              alt={artist.name}
+                              className="w-full aspect-square rounded-full object-cover bg-zinc-800 group-hover:ring-2 ring-green-500 transition"
+                            />
+                          ) : (
+                            <div className="w-full aspect-square rounded-full bg-zinc-800 flex items-center justify-center">
+                              <Mic2 className="w-8 h-8 text-zinc-600" />
+                            </div>
+                          )}
+                          {idx < 3 && (
+                            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-green-600 text-[10px] font-bold flex items-center justify-center">
+                              {idx + 1}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-medium truncate group-hover:text-green-400 transition">
+                          {artist.name}
+                        </p>
+                      </a>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-zinc-600 text-center py-6">데이터가 아직 없습니다</p>
+                )}
+              </div>
+
+              {/* Top 트랙 */}
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Top 트랙</h4>
+                  <div className="flex gap-1">
+                    {(['short_term', 'medium_term', 'long_term'] as const).map(range => (
+                      <button
+                        key={range}
+                        onClick={() => setTrackTimeRange(range)}
+                        className={`px-3 py-1 text-xs rounded-full transition ${trackTimeRange === range
+                          ? 'bg-green-600 text-white'
+                          : 'bg-zinc-800/50 text-zinc-500 hover:text-zinc-300'
+                          }`}
+                      >
+                        {TIME_RANGE_LABELS[range]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {tracksLoading ? (
+                  <div className="flex items-center justify-center py-10">
+                    <Loader2 className="w-5 h-5 text-zinc-500 animate-spin" />
+                  </div>
+                ) : (
                   <div className="space-y-2">
-                    {rarity.tracks.slice(0, 5).map((track, idx) => (
+                    {topTracks.slice(0, 10).map((track, idx) => (
                       <a
                         key={track.id}
                         href={track.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-zinc-800/50 transition group"
+                        className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-3 flex items-center gap-4 hover:bg-zinc-800/50 transition group"
                       >
-                        <span
-                          className="text-xs font-black w-8 text-center"
-                          style={{ color: track.color }}
-                        >
-                          {track.grade}
+                        <span className={`text-sm font-bold w-6 text-center ${idx < 3 ? 'text-green-400' : 'text-zinc-600'}`}>
+                          {idx + 1}
                         </span>
                         {track.image && (
                           <img
                             src={track.image}
-                            alt={track.name}
+                            alt={track.album}
                             className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-zinc-800"
                           />
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate group-hover:text-green-400 transition">
+                          <p className="font-medium text-sm truncate group-hover:text-green-400 transition">
                             {track.name}
                           </p>
                           <p className="text-xs text-zinc-500 truncate">{track.artist}</p>
                         </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-xs font-semibold" style={{ color: track.color }}>
-                            {track.rarityScore}점
-                          </p>
-                          <p className="text-[10px] text-zinc-600">{track.label}</p>
+                        <span className="text-xs text-zinc-600 flex-shrink-0">
+                          {formatDuration(track.duration_ms)}
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 최근 재생 기록 */}
+              {recentTracks.length > 0 && (
+                <div className="mb-8">
+                  <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">최근 재생 기록</h4>
+                  <div className="space-y-1">
+                    {recentTracks.slice(0, 10).map((track, idx) => (
+                      <a
+                        key={`${track.id}-${idx}`}
+                        href={track.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-zinc-900/50 transition group"
+                      >
+                        {track.image && (
+                          <img
+                            src={track.image}
+                            alt={track.album}
+                            className="w-8 h-8 rounded object-cover flex-shrink-0 bg-zinc-800"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm truncate group-hover:text-green-400 transition">{track.name}</p>
+                          <p className="text-xs text-zinc-600 truncate">{track.artist}</p>
                         </div>
+                        <span className="text-[10px] text-zinc-600 flex-shrink-0">
+                          {timeAgo(track.played_at)}
+                        </span>
                       </a>
                     ))}
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Top 아티스트 */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Top 아티스트</h4>
-                <div className="flex gap-1">
-                  {(['short_term', 'medium_term', 'long_term'] as const).map(range => (
-                    <button
-                      key={range}
-                      onClick={() => setArtistTimeRange(range)}
-                      className={`px-3 py-1 text-xs rounded-full transition ${
-                        artistTimeRange === range
-                          ? 'bg-green-600 text-white'
-                          : 'bg-zinc-800/50 text-zinc-500 hover:text-zinc-300'
-                      }`}
-                    >
-                      {TIME_RANGE_LABELS[range]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {artistsLoading ? (
-                <div className="flex items-center justify-center py-10">
-                  <Loader2 className="w-5 h-5 text-zinc-500 animate-spin" />
-                </div>
-              ) : topArtists.length > 0 ? (
-                <div className="grid grid-cols-4 gap-3">
-                  {topArtists.slice(0, 8).map((artist, idx) => (
-                    <a
-                      key={artist.id}
-                      href={artist.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="group text-center"
-                    >
-                      <div className="relative mb-2">
-                        {artist.image ? (
-                          <img
-                            src={artist.image}
-                            alt={artist.name}
-                            className="w-full aspect-square rounded-full object-cover bg-zinc-800 group-hover:ring-2 ring-green-500 transition"
-                          />
-                        ) : (
-                          <div className="w-full aspect-square rounded-full bg-zinc-800 flex items-center justify-center">
-                            <Mic2 className="w-8 h-8 text-zinc-600" />
-                          </div>
-                        )}
-                        {idx < 3 && (
-                          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-green-600 text-[10px] font-bold flex items-center justify-center">
-                            {idx + 1}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs font-medium truncate group-hover:text-green-400 transition">
-                        {artist.name}
-                      </p>
-                    </a>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-zinc-600 text-center py-6">데이터가 아직 없습니다</p>
               )}
-            </div>
-
-            {/* Top 트랙 */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Top 트랙</h4>
-                <div className="flex gap-1">
-                  {(['short_term', 'medium_term', 'long_term'] as const).map(range => (
-                    <button
-                      key={range}
-                      onClick={() => setTrackTimeRange(range)}
-                      className={`px-3 py-1 text-xs rounded-full transition ${
-                        trackTimeRange === range
-                          ? 'bg-green-600 text-white'
-                          : 'bg-zinc-800/50 text-zinc-500 hover:text-zinc-300'
-                      }`}
-                    >
-                      {TIME_RANGE_LABELS[range]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {tracksLoading ? (
-                <div className="flex items-center justify-center py-10">
-                  <Loader2 className="w-5 h-5 text-zinc-500 animate-spin" />
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {topTracks.slice(0, 10).map((track, idx) => (
-                    <a
-                      key={track.id}
-                      href={track.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-3 flex items-center gap-4 hover:bg-zinc-800/50 transition group"
-                    >
-                      <span className={`text-sm font-bold w-6 text-center ${idx < 3 ? 'text-green-400' : 'text-zinc-600'}`}>
-                        {idx + 1}
-                      </span>
-                      {track.image && (
-                        <img
-                          src={track.image}
-                          alt={track.album}
-                          className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-zinc-800"
-                        />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate group-hover:text-green-400 transition">
-                          {track.name}
-                        </p>
-                        <p className="text-xs text-zinc-500 truncate">{track.artist}</p>
-                      </div>
-                      <span className="text-xs text-zinc-600 flex-shrink-0">
-                        {formatDuration(track.duration_ms)}
-                      </span>
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* 최근 재생 기록 */}
-            {recentTracks.length > 0 && (
-              <div className="mb-8">
-                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">최근 재생 기록</h4>
-                <div className="space-y-1">
-                  {recentTracks.slice(0, 10).map((track, idx) => (
-                    <a
-                      key={`${track.id}-${idx}`}
-                      href={track.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-3 py-2 px-3 rounded-lg hover:bg-zinc-900/50 transition group"
-                    >
-                      {track.image && (
-                        <img
-                          src={track.image}
-                          alt={track.album}
-                          className="w-8 h-8 rounded object-cover flex-shrink-0 bg-zinc-800"
-                        />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm truncate group-hover:text-green-400 transition">{track.name}</p>
-                        <p className="text-xs text-zinc-600 truncate">{track.artist}</p>
-                      </div>
-                      <span className="text-[10px] text-zinc-600 flex-shrink-0">
-                        {timeAgo(track.played_at)}
-                      </span>
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+            </>
+          )}
+        </div>
       )}
 
       {/* 영화/드라마 탭 */}

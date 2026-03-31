@@ -14,7 +14,8 @@
       "Bash(identify /tmp/bf6_header.jpg)",
       "Bash(python3 -c \"from PIL import Image; img=Image.open\\(''/tmp/bf6_header.jpg''\\); print\\(img.size\\)\")",
       "Bash(powershell -c \"[System.Drawing.Image]::FromFile\\(''C:\\\\Users\\\\yeoun\\\\AppData\\\\Local\\\\Temp\\\\bf6_header.jpg''\\).Size\")",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(find t:/Tasticord/Changyeon_Tasticord/src/lib -type f -name *.ts -o -name *.tsx)"
     ]
   }
 }
