@@ -79,10 +79,19 @@ export async function fetchGenreStats(games: Array<{ appid: number; name: string
     .sort((a, b) => b.playtime - a.playtime);
 }
 
+// Steam 레벨 조회
+export async function getSteamLevel(steamId: string) {
+  const data = await steamFetch(`/IPlayerService/GetSteamLevel/v1/?steamid=${steamId}`);
+  return data?.response?.player_level ?? null;
+}
+
 // 현재 플레이 중인 게임 조회
 // GetPlayerSummaries 응답에서 gameextrainfo(게임명), gameid(앱ID) 추출
 export async function getCurrentlyPlaying(steamId: string) {
-  const data = await getPlayerSummaries(steamId);
+  const [data, level] = await Promise.all([
+    getPlayerSummaries(steamId),
+    getSteamLevel(steamId).catch(() => null),
+  ]);
   const player = data?.response?.players?.[0];
 
   if (!player) return null;
@@ -99,5 +108,6 @@ export async function getCurrentlyPlaying(steamId: string) {
     profileName: player.personaname,
     avatarUrl: player.avatarfull,
     isProfilePublic: player.communityvisibilitystate === 3,
+    steamLevel: level,
   };
 }

@@ -45,8 +45,8 @@ export default function FeedPage() {
           </div>
         ) : activities.length === 0 ? (
           <div className="text-center py-20">
-            <div className="text-zinc-600 text-lg">아직 피드가 없습니다</div>
-            <p className="text-zinc-700 text-sm mt-2">플랫폼을 연동하고 친구를 추가해보세요</p>
+            <div className="text-zinc-400 text-lg">아직 피드가 없습니다</div>
+            <p className="text-zinc-500 text-sm mt-2">플랫폼을 연동하고 친구를 추가해보세요</p>
           </div>
         ) : (
           <>
