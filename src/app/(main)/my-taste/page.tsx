@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Gamepad2, Clock, Trophy, Loader2, Music, Film, ShieldAlert, Mic2, Disc3, History } from 'lucide-react';
+import { Gamepad2, Clock, Trophy, Loader2, Music, Film, ShieldAlert, Mic2 } from 'lucide-react';
 
 // Steam 게임 헤더 이미지 URL (Store API 프록시 경유 — 정확한 이미지 보장)
 function getSteamHeaderUrl(appId: number) {
@@ -127,25 +127,6 @@ interface SpotifyGenreStat {
   percentage: number;
 }
 
-interface RarityTrack {
-  id: string;
-  name: string;
-  artist: string;
-  image: string | null;
-  url: string;
-  rarityScore: number;
-  grade: string;
-  label: string;
-  color: string;
-}
-
-interface RarityData {
-  tracks: RarityTrack[];
-  averageScore: number;
-  summary: { grade: string; label: string; color: string } | null;
-  gradeDistribution: Record<string, number>;
-}
-
 interface SpotifyNowPlaying {
   is_playing: boolean;
   item: {
@@ -190,6 +171,8 @@ export default function MyTastePage() {
   const [loading, setLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
   const [activeTab, setActiveTab] = useState<'game' | 'music' | 'movie'>('game');
+  const [steamFetched, setSteamFetched] = useState(false);
+  const [spotifyFetched, setSpotifyFetched] = useState(false);
 
   // Spotify 관련 state
   const [spotifyConnected, setSpotifyConnected] = useState<boolean | null>(null);
@@ -204,10 +187,10 @@ export default function MyTastePage() {
   const [tracksLoading, setTracksLoading] = useState(false);
   const [spotifyGenres, setSpotifyGenres] = useState<SpotifyGenreStat[]>([]);
   const [spotifyGenresLoading, setSpotifyGenresLoading] = useState(false);
-  const [rarity, setRarity] = useState<RarityData | null>(null);
-  const [rarityLoading, setRarityLoading] = useState(false);
 
   useEffect(() => {
+    if (activeTab !== 'game' || steamFetched) return;
+
     async function fetchData() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
@@ -224,6 +207,7 @@ export default function MyTastePage() {
       if (!connection) {
         setSteamConnected(false);
         setLoading(false);
+        setSteamFetched(true);
         return;
       }
 
@@ -308,13 +292,16 @@ export default function MyTastePage() {
         setAchievements(data.achievements || []);
       }
       setAchievementsLoading(false);
+      setSteamFetched(true);
     }
 
     fetchData();
-  }, []);
+  }, [activeTab, steamFetched]);
 
   // Spotify 데이터 가져오기
   useEffect(() => {
+    if (activeTab !== 'music' || spotifyFetched) return;
+
     async function fetchSpotifyData() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
@@ -330,6 +317,7 @@ export default function MyTastePage() {
       if (!connection) {
         setSpotifyConnected(false);
         setMusicLoading(false);
+        setSpotifyFetched(true);
         return;
       }
 
@@ -367,30 +355,22 @@ export default function MyTastePage() {
 
       setMusicLoading(false);
 
-      // 장르 분포 + 희귀도 분석 (별도 로딩, 병렬)
+      // 장르 분포 (별도 로딩)
       setSpotifyGenresLoading(true);
-      setRarityLoading(true);
 
-      const [genresRes2, rarityRes] = await Promise.allSettled([
-        fetch('/api/spotify/genres'),
-        fetch('/api/spotify/rarity'),
-      ]);
-
-      if (genresRes2.status === 'fulfilled' && genresRes2.value.ok) {
-        const data = await genresRes2.value.json();
-        setSpotifyGenres(data.genres || []);
-      }
+      try {
+        const genresRes2 = await fetch('/api/spotify/genres');
+        if (genresRes2.ok) {
+          const data = await genresRes2.json();
+          setSpotifyGenres(data.genres || []);
+        }
+      } catch { /* ignore */ }
       setSpotifyGenresLoading(false);
-
-      if (rarityRes.status === 'fulfilled' && rarityRes.value.ok) {
-        const data = await rarityRes.value.json();
-        setRarity(data);
-      }
-      setRarityLoading(false);
+      setSpotifyFetched(true);
     }
 
     fetchSpotifyData();
-  }, []);
+  }, [activeTab, spotifyFetched]);
 
   // 아티스트 기간 변경
   useEffect(() => {
@@ -816,127 +796,6 @@ export default function MyTastePage() {
                         </span>
                       );
                     })}
-                  </div>
-                </div>
-              )}
-
-              {/* 희귀도 분석 */}
-              {rarityLoading ? (
-                <div className="mb-8">
-                  <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-6 flex items-center justify-center">
-                    <Loader2 className="w-5 h-5 text-zinc-500 animate-spin mr-2" />
-                    <span className="text-sm text-zinc-500">희귀도 분석 중...</span>
-                  </div>
-                </div>
-              ) : rarity && rarity.tracks.length > 0 && (
-                <div className="mb-8">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Disc3 className="w-4 h-4 text-zinc-400" />
-                    <p className="text-sm text-zinc-400">최근 4주간 들은 곡의 희귀도</p>
-                  </div>
-
-                  {/* 평균 희귀도 요약 */}
-                  {rarity.summary && (
-                    <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-5 mb-3">
-                      <div className="flex items-center justify-between mb-4">
-                        <div>
-                          <p className="text-xs text-zinc-500 mb-1">나의 평균 희귀도</p>
-                          <div className="flex items-center gap-3">
-                            <span
-                              className="text-3xl font-black"
-                              style={{ color: rarity.summary.color }}
-                            >
-                              {rarity.summary.grade}
-                            </span>
-                            <div>
-                              <p className="text-sm font-semibold" style={{ color: rarity.summary.color }}>
-                                {rarity.summary.label}
-                              </p>
-                              <p className="text-xs text-zinc-500">{rarity.averageScore}점 / 100</p>
-                            </div>
-                          </div>
-                        </div>
-                        {/* 등급 분포 */}
-                        <div className="flex gap-2">
-                          {(['SS', 'S', 'A', 'B', 'C'] as const).map(g => {
-                            const count = rarity.gradeDistribution[g] || 0;
-                            if (count === 0) return null;
-                            const colors: Record<string, string> = {
-                              SS: 'text-yellow-400', S: 'text-purple-400',
-                              A: 'text-blue-400', B: 'text-emerald-400', C: 'text-zinc-400',
-                            };
-                            return (
-                              <div key={g} className="text-center">
-                                <p className={`text-xs font-bold ${colors[g]}`}>{g}</p>
-                                <p className="text-sm font-semibold">{count}</p>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* 희귀도 바 */}
-                      <div className="w-full h-3 bg-zinc-800 rounded-full overflow-hidden flex">
-                        {(['SS', 'S', 'A', 'B', 'C'] as const).map(g => {
-                          const count = rarity.gradeDistribution[g] || 0;
-                          const pct = (count / rarity.tracks.length) * 100;
-                          if (pct === 0) return null;
-                          const bgColors: Record<string, string> = {
-                            SS: 'bg-yellow-400', S: 'bg-purple-400',
-                            A: 'bg-blue-400', B: 'bg-emerald-400', C: 'bg-zinc-500',
-                          };
-                          return (
-                            <div
-                              key={g}
-                              className={`h-full ${bgColors[g]} transition-all duration-500`}
-                              style={{ width: `${pct}%` }}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 가장 희귀한 곡 Top 5 */}
-                  <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-5">
-                    <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3">가장 희귀한 곡</p>
-                    <div className="space-y-2">
-                      {rarity.tracks.slice(0, 5).map((track, idx) => (
-                        <a
-                          key={track.id}
-                          href={track.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-3 p-2 rounded-lg hover:bg-zinc-800/50 transition group"
-                        >
-                          <span
-                            className="text-xs font-black w-8 text-center"
-                            style={{ color: track.color }}
-                          >
-                            {track.grade}
-                          </span>
-                          {track.image && (
-                            <img
-                              src={track.image}
-                              alt={track.name}
-                              className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-zinc-800"
-                            />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate group-hover:text-green-400 transition">
-                              {track.name}
-                            </p>
-                            <p className="text-xs text-zinc-500 truncate">{track.artist}</p>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className="text-xs font-semibold" style={{ color: track.color }}>
-                              {track.rarityScore}점
-                            </p>
-                            <p className="text-[10px] text-zinc-600">{track.label}</p>
-                          </div>
-                        </a>
-                      ))}
-                    </div>
                   </div>
                 </div>
               )}
