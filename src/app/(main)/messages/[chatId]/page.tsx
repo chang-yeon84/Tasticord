@@ -235,7 +235,7 @@ export default function ChatRoomPage() {
     return () => observer.disconnect();
   }, [loading, loadingMore, hasMore, messages, roomId, supabase]);
 
-  // 메시지 전송
+  // 텍스트 메시지 전송
   const handleSend = async (content: string) => {
     if (!currentUserId) return;
 
@@ -254,6 +254,30 @@ export default function ChatRoomPage() {
       room_id: roomId,
       sender_id: currentUserId,
       content,
+    });
+  };
+
+  // 카드 메시지 전송 (음악/게임/영화 추천)
+  const handleSendCard = async (embedType: 'music' | 'game' | 'movie' | null, embedData: Record<string, unknown>) => {
+    if (!currentUserId || !embedType) return;
+
+    const tempMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      room_id: roomId,
+      sender_id: currentUserId,
+      content: '',
+      embed_type: embedType,
+      embed_data: embedData,
+      created_at: new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, tempMessage]);
+
+    await supabase.from('chat_messages').insert({
+      room_id: roomId,
+      sender_id: currentUserId,
+      content: '',
+      embed_type: embedType,
+      embed_data: embedData,
     });
   };
 
@@ -321,7 +345,7 @@ export default function ChatRoomPage() {
 
             return (
               <div key={msg.id}>
-                <ChatBubble message={msg} isOwn={isOwn} />
+                <ChatBubble message={msg} isOwn={isOwn} showTimestamp={idx === messages.length - 1} />
                 {showRead && (
                   <div className="text-[10px] text-purple-400 text-right mt-0.5 mr-1">읽음</div>
                 )}
@@ -333,7 +357,7 @@ export default function ChatRoomPage() {
       </div>
 
       {/* 입력 */}
-      <ChatInput onSend={handleSend} onTyping={sendTyping} />
+      <ChatInput onSend={handleSend} onSendCard={handleSendCard} onTyping={sendTyping} />
     </div>
   );
 }

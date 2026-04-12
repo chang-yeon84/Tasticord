@@ -6,11 +6,14 @@ import { createClient } from '@/lib/supabase/client';
 import StatusDot from '@/components/ui/StatusDot';
 import NetflixUpload from '@/components/NetflixUpload';
 import type { PlatformConnection } from '@/types';
+import { FaSpotify, FaSteam } from 'react-icons/fa';
+import { SiApplemusic } from 'react-icons/si';
 
+// react-icons의 공식 브랜드 로고 사용
 const allPlatforms = [
-  { key: 'spotify', name: 'Spotify', icon: '🎵', bgColor: 'bg-green-600', fullSupport: true },
-  { key: 'apple_music', name: 'Apple Music', icon: '🎶', bgColor: 'bg-pink-600', fullSupport: true },
-  { key: 'steam', name: 'Steam', icon: '🎮', bgColor: 'bg-zinc-800', fullSupport: true },
+  { key: 'spotify', name: 'Spotify', Icon: FaSpotify, bgColor: 'bg-green-600', fullSupport: true },
+  { key: 'apple_music', name: 'Apple Music', Icon: SiApplemusic, bgColor: 'bg-pink-600', fullSupport: true },
+  { key: 'steam', name: 'Steam', Icon: FaSteam, bgColor: 'bg-zinc-800', fullSupport: true },
 ];
 
 export default function ProfilePage() {
@@ -112,7 +115,9 @@ export default function ProfilePage() {
               onClick={() => !isConnected && handleConnect(p.key)}
               className={`bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/35 rounded-xl p-4 flex items-center gap-4 ${!isConnected ? 'opacity-50 cursor-pointer hover:opacity-70 transition' : ''}`}
             >
-              <div className={`w-10 h-10 rounded-lg ${p.bgColor} flex items-center justify-center flex-shrink-0 text-lg`}>{p.icon}</div>
+              <div className={`w-10 h-10 rounded-lg ${p.bgColor} flex items-center justify-center flex-shrink-0`}>
+                <p.Icon className="w-7 h-7 text-white" />
+              </div>
               <div className="flex-1">
                 <div className="font-medium text-sm">{p.name}</div>
                 <div className="text-xs text-zinc-500">

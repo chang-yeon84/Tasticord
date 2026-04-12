@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { Upload, CheckCircle, AlertCircle, Loader2, Film } from 'lucide-react';
+import { SiNetflix } from 'react-icons/si';
 
 /**
  * 넷플릭스 시청 기록 CSV 업로드 컴포넌트
@@ -84,7 +85,7 @@ export default function NetflixUpload({ onUploadComplete }: NetflixUploadProps) 
     <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-2xl p-6">
       {/* 헤더 */}
       <div className="flex items-center gap-3 mb-4">
-        <Film className="w-5 h-5 text-red-500" />
+        <SiNetflix className="w-5 h-5 text-[#E50914]" />
         <h3 className="text-sm font-semibold">Netflix 시청 기록</h3>
       </div>
 

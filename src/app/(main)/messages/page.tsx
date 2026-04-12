@@ -71,14 +71,23 @@ export default function MessagesPage() {
 
         const other = members?.find(m => m.user_id !== user.id);
 
-        // 마지막 메시지
+        // 마지막 메시지 (카드 타입 포함)
         const { data: lastMsg } = await supabase
           .from('chat_messages')
-          .select('content, created_at')
+          .select('content, embed_type, created_at')
           .eq('room_id', room.id)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+
+        // 마지막 메시지 프리뷰: 카드면 타입별 텍스트
+        let lastMessagePreview: string | null = null;
+        if (lastMsg) {
+          if (lastMsg.embed_type === 'music') lastMessagePreview = '🎵 음악 추천 카드';
+          else if (lastMsg.embed_type === 'game') lastMessagePreview = '🎮 게임 추천 카드';
+          else if (lastMsg.embed_type === 'movie') lastMessagePreview = '🎬 영화/드라마 추천 카드';
+          else lastMessagePreview = lastMsg.content || null;
+        }
 
         // 안 읽은 메시지 수
         const lastRead = lastReadMap[room.id];
@@ -98,7 +107,7 @@ export default function MessagesPage() {
           type: room.type,
           created_at: room.created_at,
           otherUser: (other?.profile as unknown as Profile) || null,
-          lastMessage: lastMsg?.content || null,
+          lastMessage: lastMessagePreview,
           lastMessageAt: lastMsg?.created_at || null,
           unreadCount,
         });
