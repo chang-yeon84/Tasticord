@@ -1,12 +1,27 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { MessageCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import Avatar from '@/components/ui/Avatar';
+import { timeAgo } from '@/lib/utils/helpers';
+import type { Profile } from '@/types';
+
+interface ChatRoomItem {
+  id: string;
+  type: string;
+  created_at: string;
+  otherUser: Profile | null;
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+  unreadCount: number;
+}
 
 export default function MessagesPage() {
-  const [playlists, setPlaylists] = useState([]);
-  const [chatRooms, setChatRooms] = useState([]);
+  const [chatRooms, setChatRooms] = useState<ChatRoomItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     async function fetchData() {
@@ -14,21 +29,89 @@ export default function MessagesPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch shared playlists
-      const { data: playlistData } = await supabase
-        .from('playlist_members')
-        .select('playlist:shared_playlists(*)')
-        .eq('user_id', user.id);
-
-      setPlaylists((playlistData || []) as any);
-
-      // Fetch chat rooms
-      const { data: chatData } = await supabase
+      // 내가 참여한 채팅방 목록
+      const { data: myMemberships } = await supabase
         .from('chat_members')
-        .select('room:chat_rooms(*, last_message:chat_messages(content, created_at))')
+        .select('room_id')
         .eq('user_id', user.id);
 
-      setChatRooms((chatData || []) as any);
+      if (!myMemberships || myMemberships.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      const roomIds = myMemberships.map(m => m.room_id);
+
+      // 채팅방 정보 가져오기
+      const { data: rooms } = await supabase
+        .from('chat_rooms')
+        .select('*')
+        .in('id', roomIds);
+
+      // 내 멤버십 정보 (last_read_at 포함)
+      const { data: myMemberDetails } = await supabase
+        .from('chat_members')
+        .select('room_id, last_read_at')
+        .eq('user_id', user.id);
+
+      const lastReadMap: Record<string, string> = {};
+      for (const m of myMemberDetails || []) {
+        lastReadMap[m.room_id] = m.last_read_at;
+      }
+
+      // 각 채팅방의 상대방 + 마지막 메시지 + 안 읽은 수 가져오기
+      const roomItems: ChatRoomItem[] = [];
+
+      for (const room of rooms || []) {
+        // 상대방 찾기
+        const { data: members } = await supabase
+          .from('chat_members')
+          .select('user_id, profile:profiles(*)')
+          .eq('room_id', room.id);
+
+        const other = members?.find(m => m.user_id !== user.id);
+
+        // 마지막 메시지
+        const { data: lastMsg } = await supabase
+          .from('chat_messages')
+          .select('content, created_at')
+          .eq('room_id', room.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        // 안 읽은 메시지 수
+        const lastRead = lastReadMap[room.id];
+        let unreadCount = 0;
+        if (lastRead) {
+          const { count } = await supabase
+            .from('chat_messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('room_id', room.id)
+            .gt('created_at', lastRead)
+            .neq('sender_id', user.id);
+          unreadCount = count || 0;
+        }
+
+        roomItems.push({
+          id: room.id,
+          type: room.type,
+          created_at: room.created_at,
+          otherUser: (other?.profile as unknown as Profile) || null,
+          lastMessage: lastMsg?.content || null,
+          lastMessageAt: lastMsg?.created_at || null,
+          unreadCount,
+        });
+      }
+
+      // 마지막 메시지 시간 기준 정렬
+      roomItems.sort((a, b) => {
+        const timeA = a.lastMessageAt || a.created_at;
+        const timeB = b.lastMessageAt || b.created_at;
+        return new Date(timeB).getTime() - new Date(timeA).getTime();
+      });
+
+      setChatRooms(roomItems);
       setLoading(false);
     }
     fetchData();
@@ -38,27 +121,9 @@ export default function MessagesPage() {
     <div className="max-w-3xl mx-auto p-8 animate-fade-up">
       <h2 className="text-2xl font-bold mb-6">메시지</h2>
 
-      <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">공동 플레이리스트</h3>
-      {loading ? (
-        <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-2xl p-5 animate-pulse mb-8">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-lg bg-zinc-800" />
-            <div className="space-y-2">
-              <div className="w-32 h-4 bg-zinc-800 rounded" />
-              <div className="w-48 h-3 bg-zinc-800 rounded" />
-            </div>
-          </div>
-        </div>
-      ) : playlists.length === 0 ? (
-        <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-2xl p-8 text-center mb-8">
-          <p className="text-zinc-600">공동 플레이리스트가 없습니다</p>
-          <p className="text-zinc-700 text-sm mt-1">친구와 함께 플레이리스트를 만들어보세요</p>
-        </div>
-      ) : null}
-
       <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">대화</h3>
       {loading ? (
-        <div className="space-y-1">
+        <div className="space-y-2">
           {[1, 2].map((i) => (
             <div key={i} className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-4 animate-pulse flex items-center gap-4">
               <div className="w-12 h-12 rounded-full bg-zinc-800" />
@@ -71,10 +136,47 @@ export default function MessagesPage() {
         </div>
       ) : chatRooms.length === 0 ? (
         <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-2xl p-8 text-center">
-          <p className="text-zinc-600">대화가 없습니다</p>
-          <p className="text-zinc-700 text-sm mt-1">친구에게 메시지를 보내보세요</p>
+          <MessageCircle className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+          <p className="text-zinc-500">대화가 없습니다</p>
+          <p className="text-zinc-600 text-sm mt-1">친구 페이지에서 메시지를 보내보세요</p>
         </div>
-      ) : null}
+      ) : (
+        <div className="space-y-2">
+          {chatRooms.map((room) => (
+            <button
+              key={room.id}
+              onClick={() => router.push(`/messages/${room.id}`)}
+              className="w-full bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-4 flex items-center gap-4 hover:bg-zinc-800/50 transition text-left"
+            >
+              <Avatar
+                name={room.otherUser?.nickname || '?'}
+                imageUrl={room.otherUser?.avatar_url}
+                size="md"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm truncate">
+                  {room.otherUser?.nickname || '알 수 없음'}
+                </p>
+                <p className="text-xs text-zinc-500 truncate mt-0.5">
+                  {room.lastMessage || '메시지가 없습니다'}
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                {room.lastMessageAt && (
+                  <span className="text-[10px] text-zinc-600">
+                    {timeAgo(room.lastMessageAt)}
+                  </span>
+                )}
+                {room.unreadCount > 0 && (
+                  <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-purple-600 text-[10px] font-bold flex items-center justify-center">
+                    {room.unreadCount > 99 ? '99+' : room.unreadCount}
+                  </span>
+                )}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

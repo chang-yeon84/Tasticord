@@ -5,9 +5,10 @@ import { Send } from 'lucide-react';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
+  onTyping?: () => void;
 }
 
-export default function ChatInput({ onSend }: ChatInputProps) {
+export default function ChatInput({ onSend, onTyping }: ChatInputProps) {
   const [text, setText] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -17,12 +18,17 @@ export default function ChatInput({ onSend }: ChatInputProps) {
     setText('');
   };
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setText(e.target.value);
+    onTyping?.();
+  };
+
   return (
     <form onSubmit={handleSubmit} className="flex items-center gap-3 p-4 border-t border-zinc-800/50">
       <input
         type="text"
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={handleChange}
         placeholder="메시지를 입력하세요..."
         className="flex-1 bg-zinc-900 border border-zinc-800 rounded-full px-5 py-3 text-sm placeholder-zinc-600 outline-none focus:border-zinc-600 transition"
       />

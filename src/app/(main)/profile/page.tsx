@@ -4,13 +4,13 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { createClient } from '@/lib/supabase/client';
 import StatusDot from '@/components/ui/StatusDot';
+import NetflixUpload from '@/components/NetflixUpload';
 import type { PlatformConnection } from '@/types';
 
 const allPlatforms = [
   { key: 'spotify', name: 'Spotify', icon: '🎵', bgColor: 'bg-green-600', fullSupport: true },
   { key: 'apple_music', name: 'Apple Music', icon: '🎶', bgColor: 'bg-pink-600', fullSupport: true },
   { key: 'steam', name: 'Steam', icon: '🎮', bgColor: 'bg-zinc-800', fullSupport: true },
-  { key: 'netflix', name: 'Netflix', icon: '🎬', bgColor: 'bg-red-700', fullSupport: false },
 ];
 
 export default function ProfilePage() {
@@ -137,6 +137,11 @@ export default function ProfilePage() {
           );
         })}
       </div>
+      {/* Netflix 시청 기록 업로드 */}
+      <div className="mt-8">
+        <NetflixUpload />
+      </div>
+
       <button onClick={signOut} className="w-full mt-8 py-3 text-sm text-zinc-500 hover:text-red-400 transition border border-zinc-800 rounded-xl hover:border-red-900/50">로그아웃</button>
     </div>
   );
