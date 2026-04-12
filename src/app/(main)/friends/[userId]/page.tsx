@@ -2,16 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, MessageCircle, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { Profile } from '@/types';
 import { getAvatarColor } from '@/lib/utils/helpers';
+
 
 export default function FriendDetailPage() {
   const router = useRouter();
   const params = useParams();
   const [friend, setFriend] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [chatLoading, setChatLoading] = useState(false);
 
   useEffect(() => {
     async function fetchFriend() {
@@ -68,6 +70,37 @@ export default function FriendDetailPage() {
           </div>
         )}
         <div className="text-xl font-bold">{friend.nickname}</div>
+
+        <button
+          onClick={async () => {
+            setChatLoading(true);
+            try {
+              const res = await fetch('/api/chat/rooms', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ friendId: friend.id }),
+              });
+              const data = await res.json();
+              if (res.ok && data.room) {
+                router.push(`/messages/${data.room.id}`);
+              } else {
+                console.error('Chat room creation failed:', data);
+              }
+            } catch {
+              console.error('Failed to create chat room');
+            }
+            setChatLoading(false);
+          }}
+          disabled={chatLoading}
+          className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-sm font-medium transition disabled:opacity-50"
+        >
+          {chatLoading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <MessageCircle className="w-4 h-4" />
+          )}
+          메시지 보내기
+        </button>
       </div>
 
       <div className="text-center py-12">

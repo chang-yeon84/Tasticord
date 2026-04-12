@@ -53,15 +53,7 @@ export function useAuth() {
   const signOut = async () => {
     await supabase.auth.signOut();
     setCurrentUser(null);
-
-    // 카카오 로그인 세션도 함께 끊기 (자동 로그인 방지)
-    const kakaoClientId = process.env.NEXT_PUBLIC_KAKAO_CLIENT_ID;
-    if (kakaoClientId) {
-      const logoutRedirect = encodeURIComponent(`${window.location.origin}/auth/login`);
-      window.location.href = `https://kauth.kakao.com/oauth/logout?client_id=${kakaoClientId}&logout_redirect_uri=${logoutRedirect}`;
-    } else {
-      window.location.href = '/auth/login';
-    }
+    window.location.href = '/auth/login';
   };
 
   return { currentUser, loading, signInWithKakao, signOut };

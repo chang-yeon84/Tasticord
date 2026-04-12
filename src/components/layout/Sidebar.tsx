@@ -1,10 +1,12 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Heart, Activity, MessageCircle, Users } from 'lucide-react';
 import Avatar from '@/components/ui/Avatar';
 import { useAuth } from '@/hooks/useAuth';
+import { createClient } from '@/lib/supabase/client';
 
 const navItems = [
   { href: '/', label: '홈', icon: Home },
@@ -17,6 +19,37 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { currentUser } = useAuth();
+  const [unreadTotal, setUnreadTotal] = useState(0);
+
+  useEffect(() => {
+    async function fetchUnread() {
+      if (!currentUser) return;
+      const supabase = createClient();
+
+      // 내가 참여한 채팅방의 last_read_at 가져오기
+      const { data: memberships } = await supabase
+        .from('chat_members')
+        .select('room_id, last_read_at')
+        .eq('user_id', currentUser.id);
+
+      if (!memberships || memberships.length === 0) return;
+
+      let total = 0;
+      for (const m of memberships) {
+        if (!m.last_read_at) continue;
+        const { count } = await supabase
+          .from('chat_messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('room_id', m.room_id)
+          .gt('created_at', m.last_read_at)
+          .neq('sender_id', currentUser.id);
+        total += count || 0;
+      }
+      setUnreadTotal(total);
+    }
+
+    fetchUnread();
+  }, [currentUser, pathname]);
 
   return (
     <aside className="hidden md:flex w-[280px] border-r border-zinc-800/60 p-6 flex-col justify-between flex-shrink-0">
@@ -39,8 +72,10 @@ export default function Sidebar() {
               >
                 <Icon className="w-[22px] h-[22px]" strokeWidth={isActive ? 2.2 : 1.8} />
                 {label}
-                {label === '메시지' && (
-                  <span className="w-2 h-2 rounded-full bg-pink-500 ml-auto" />
+                {label === '메시지' && unreadTotal > 0 && (
+                  <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-purple-600 text-[10px] font-bold flex items-center justify-center">
+                    {unreadTotal > 99 ? '99+' : unreadTotal}
+                  </span>
                 )}
               </Link>
             );

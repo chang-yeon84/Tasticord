@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Gamepad2, Clock, Trophy, Loader2, Music, Film, ShieldAlert, Mic2 } from 'lucide-react';
+import NetflixUpload from '@/components/NetflixUpload';
 
 // Steam 게임 헤더 이미지 URL (Store API 프록시 경유 — 정확한 이미지 보장)
 function getSteamHeaderUrl(appId: number) {
@@ -166,6 +167,8 @@ export default function MyTastePage() {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [achievementsLoading, setAchievementsLoading] = useState(false);
   const [currentlyPlaying, setCurrentlyPlaying] = useState<CurrentlyPlaying | null>(null);
+  const [recentLoading, setRecentLoading] = useState(true);
+  const [currentlyPlayingLoading, setCurrentlyPlayingLoading] = useState(true);
   const [steamConnected, setSteamConnected] = useState<boolean | null>(null);
   const [steamProfilePublic, setSteamProfilePublic] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
@@ -187,6 +190,14 @@ export default function MyTastePage() {
   const [tracksLoading, setTracksLoading] = useState(false);
   const [spotifyGenres, setSpotifyGenres] = useState<SpotifyGenreStat[]>([]);
   const [spotifyGenresLoading, setSpotifyGenresLoading] = useState(false);
+
+  // Netflix 관련 state
+  const [netflixCount, setNetflixCount] = useState<number | null>(null);
+  const [netflixFetched, setNetflixFetched] = useState(false);
+  const [netflixHistory, setNetflixHistory] = useState<Array<{ title: string; date_watched: string; poster_url: string | null; metadata: { genres?: string[]; media_type?: string } }>>([]);
+  const [netflixRecentCount, setNetflixRecentCount] = useState(0);
+  const [netflixLoading, setNetflixLoading] = useState(true);
+  const [netflixShowAll, setNetflixShowAll] = useState(false);
 
   useEffect(() => {
     if (activeTab !== 'game' || steamFetched) return;
@@ -243,33 +254,30 @@ export default function MyTastePage() {
         }
       }
 
-      // 최근 2주간 플레이한 게임
-      try {
-        const res = await fetch('/api/steam/recent');
-        if (res.ok) {
-          const data = await res.json();
-          setRecentGames(
-            (data?.response?.games || [])
-              .sort((a: RecentGame, b: RecentGame) => b.playtime_2weeks - a.playtime_2weeks)
-          );
-        }
-      } catch {
-        console.error('Failed to fetch recent games');
-      }
-
-      // 현재 플레이 중인 게임 + 프로필 공개 여부
-      try {
-        const res = await fetch('/api/steam/currently-playing');
-        if (res.ok) {
-          const data = await res.json();
-          setCurrentlyPlaying(data);
-          setSteamProfilePublic(data?.isProfilePublic ?? null);
-        }
-      } catch {
-        console.error('Failed to fetch currently playing');
-      }
-
+      // 보유 게임 데이터가 준비되면 메인 로딩 해제 (화면 먼저 표시)
       setLoading(false);
+
+      // 최근 게임 + 현재 플레이 중을 병렬로 호출
+      const [recentRes, currentlyPlayingRes] = await Promise.allSettled([
+        fetch('/api/steam/recent'),
+        fetch('/api/steam/currently-playing'),
+      ]);
+
+      if (recentRes.status === 'fulfilled' && recentRes.value.ok) {
+        const data = await recentRes.value.json();
+        setRecentGames(
+          (data?.response?.games || [])
+            .sort((a: RecentGame, b: RecentGame) => b.playtime_2weeks - a.playtime_2weeks)
+        );
+      }
+      setRecentLoading(false);
+
+      if (currentlyPlayingRes.status === 'fulfilled' && currentlyPlayingRes.value.ok) {
+        const data = await currentlyPlayingRes.value.json();
+        setCurrentlyPlaying(data);
+        setSteamProfilePublic(data?.isProfilePublic ?? null);
+      }
+      setCurrentlyPlayingLoading(false);
 
       // 장르 + 도전과제 (메인 로딩 후 별도로 가져오기)
       setGenresLoading(true);
@@ -392,6 +400,32 @@ export default function MyTastePage() {
       .finally(() => setTracksLoading(false));
   }, [trackTimeRange, spotifyConnected]);
 
+  // Netflix 데이터 가져오기 (영화/드라마 탭 진입 시)
+  useEffect(() => {
+    if (activeTab !== 'movie' || netflixFetched) return;
+
+    async function fetchNetflixData() {
+      setNetflixLoading(true);
+      try {
+        const res = await fetch('/api/netflix/history');
+        if (res.ok) {
+          const data = await res.json();
+          setNetflixHistory(data.history || []);
+          setNetflixCount(data.totalCount || 0);
+          setNetflixRecentCount(data.recentCount || 0);
+        } else {
+          setNetflixCount(0);
+        }
+      } catch {
+        setNetflixCount(0);
+      }
+      setNetflixLoading(false);
+      setNetflixFetched(true);
+    }
+
+    fetchNetflixData();
+  }, [activeTab, netflixFetched]);
+
   const TIME_RANGE_LABELS: Record<string, string> = {
     short_term: '4주',
     medium_term: '6개월',
@@ -461,7 +495,12 @@ export default function MyTastePage() {
           ) : (
             <>
               {/* Steam 프로필 */}
-              {currentlyPlaying && (
+              {currentlyPlayingLoading ? (
+                <div className="mb-4 flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 text-zinc-600 animate-spin" />
+                  <span className="text-sm text-zinc-600">프로필 불러오는 중...</span>
+                </div>
+              ) : currentlyPlaying && (
                 <div className="mb-4 flex items-center gap-3">
                   {currentlyPlaying.avatarUrl && (
                     <img
@@ -478,7 +517,12 @@ export default function MyTastePage() {
               )}
 
               {/* 현재 플레이 중 */}
-              {currentlyPlaying?.isPlaying ? (
+              {currentlyPlayingLoading ? (
+                <div className="mb-6 flex items-center gap-2 px-4 py-3 rounded-xl border border-zinc-800/40 bg-zinc-900/30">
+                  <Loader2 className="w-4 h-4 text-zinc-600 animate-spin" />
+                  <span className="text-sm text-zinc-600">현재 상태 확인 중...</span>
+                </div>
+              ) : currentlyPlaying?.isPlaying ? (
                 <div className="mb-6 bg-gradient-to-r from-green-900/30 to-emerald-900/20 border border-green-800/30 rounded-2xl p-5">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
@@ -605,7 +649,14 @@ export default function MyTastePage() {
               )}
 
               {/* 최근에 많이 플레이한 게임 */}
-              {recentGames.length > 0 && (
+              {recentLoading ? (
+                <div className="mb-8">
+                  <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">최근에 많이 플레이한 게임</h4>
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="w-5 h-5 text-zinc-500 animate-spin" />
+                  </div>
+                </div>
+              ) : recentGames.length > 0 && (
                 <>
                   <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">최근에 많이 플레이한 게임</h4>
                   <div className="grid grid-cols-3 gap-3 mb-8">
@@ -959,10 +1010,131 @@ export default function MyTastePage() {
 
       {/* 영화/드라마 탭 */}
       {activeTab === 'movie' && (
-        <div className="text-center py-20 bg-zinc-900/50 border border-zinc-800/35 rounded-2xl">
-          <Film className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
-          <p className="text-zinc-500">영화/드라마 취향 분석이 곧 추가될 예정이에요</p>
-          <p className="text-xs text-zinc-600 mt-2">Netflix 연동 후 이용 가능</p>
+        <div className="mb-10">
+          {netflixLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-6 h-6 text-zinc-500 animate-spin" />
+            </div>
+          ) : netflixCount === 0 ? (
+            <div>
+              <div className="text-center py-12 bg-zinc-900/50 border border-zinc-800/35 rounded-2xl mb-6">
+                <Film className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+                <p className="text-zinc-500">넷플릭스 시청 기록이 없습니다</p>
+                <p className="text-xs text-zinc-600 mt-2">CSV 파일을 업로드하면 취향 분석이 시작됩니다</p>
+              </div>
+              <NetflixUpload onUploadComplete={() => { setNetflixFetched(false); setNetflixCount(null); setNetflixLoading(true); }} />
+            </div>
+          ) : (
+            <>
+              {/* 1. 요약 통계 */}
+              <div className="grid grid-cols-2 gap-3 mb-8">
+                <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-4 text-center">
+                  <Film className="w-5 h-5 text-zinc-500 mx-auto mb-2" />
+                  <div className="text-xl font-bold">{netflixRecentCount}</div>
+                  <div className="text-xs text-zinc-500">최근 한 달 시청</div>
+                </div>
+                <div className="bg-zinc-900/50 border border-zinc-800/35 rounded-xl p-4 text-center">
+                  <Film className="w-5 h-5 text-zinc-500 mx-auto mb-2" />
+                  <div className="text-xl font-bold">{netflixCount}</div>
+                  <div className="text-xs text-zinc-500">전체 작품</div>
+                </div>
+              </div>
+
+              {/* 장르 뱃지 */}
+              {(() => {
+                const genreCount: Record<string, number> = {};
+                for (const item of netflixHistory) {
+                  for (const g of item.metadata?.genres || []) {
+                    genreCount[g] = (genreCount[g] || 0) + 1;
+                  }
+                }
+                const topGenres = Object.entries(genreCount)
+                  .sort(([, a], [, b]) => b - a)
+                  .slice(0, 5);
+
+                if (topGenres.length === 0) return null;
+
+                const badgeStyles = [
+                  'bg-red-500/15 border-red-500/30 text-red-400',
+                  'bg-orange-500/15 border-orange-500/30 text-orange-400',
+                  'bg-amber-500/15 border-amber-500/30 text-amber-400',
+                  'bg-rose-500/15 border-rose-500/30 text-rose-400',
+                  'bg-zinc-500/15 border-zinc-500/30 text-zinc-400',
+                ];
+
+                return (
+                  <div className="mb-8">
+                    <p className="text-sm text-zinc-400 mb-3">가장 많이 본 장르</p>
+                    <div className="flex flex-wrap gap-2">
+                      {topGenres.map(([name], idx) => (
+                        <span
+                          key={name}
+                          className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-medium border ${badgeStyles[idx] || badgeStyles[4]}`}
+                        >
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 2. 최근에 본 작품 (가로 스크롤) */}
+              <div className="mb-8">
+                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">최근에 본 작품</h4>
+                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
+                  {netflixHistory.slice(0, 10).map((item) => (
+                    <div key={item.title} className="flex-shrink-0 w-[130px]">
+                      {item.poster_url ? (
+                        <img
+                          src={item.poster_url}
+                          alt={item.title}
+                          className="w-full aspect-[2/3] rounded-xl object-cover bg-zinc-800"
+                        />
+                      ) : (
+                        <div className="w-full aspect-[2/3] rounded-xl bg-zinc-800 flex items-center justify-center p-2">
+                          <span className="text-xs text-zinc-500 text-center">{item.title}</span>
+                        </div>
+                      )}
+                      <p className="text-xs font-medium mt-2 truncate">{item.title}</p>
+                      <p className="text-[10px] text-zinc-600">{item.date_watched}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. 전체 시청 목록 (그리드) */}
+              <div>
+                <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">전체 시청 목록</h4>
+                <div className="grid grid-cols-4 gap-3">
+                  {(netflixShowAll ? netflixHistory : netflixHistory.slice(0, 12)).map((item) => (
+                    <div key={item.title} className="group">
+                      {item.poster_url ? (
+                        <img
+                          src={item.poster_url}
+                          alt={item.title}
+                          className="w-full aspect-[2/3] rounded-xl object-cover bg-zinc-800 group-hover:ring-2 ring-red-500 transition"
+                        />
+                      ) : (
+                        <div className="w-full aspect-[2/3] rounded-xl bg-zinc-800 flex items-center justify-center p-2 group-hover:ring-2 ring-red-500 transition">
+                          <span className="text-xs text-zinc-500 text-center">{item.title}</span>
+                        </div>
+                      )}
+                      <p className="text-xs font-medium mt-1.5 truncate">{item.title}</p>
+                    </div>
+                  ))}
+                </div>
+                {netflixHistory.length > 12 && (
+                  <button
+                    onClick={() => setNetflixShowAll(!netflixShowAll)}
+                    className="w-full mt-4 py-3 text-sm text-zinc-500 hover:text-zinc-300 transition border border-zinc-800/35 rounded-xl hover:bg-zinc-800/30"
+                  >
+                    {netflixShowAll ? '접기' : `더보기 (${netflixHistory.length - 12}개)`}
+                  </button>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
