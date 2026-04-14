@@ -44,7 +44,7 @@ export default function ChatBubble({ message, isOwn, showTimestamp = false }: Ch
         )}
 
         {showTimestamp && (
-          <div className={`text-[10px] text-zinc-600 mt-1 ${isOwn ? 'text-right' : ''}`}>
+          <div className={`text-[10px] text-zinc-400 mt-1 ${isOwn ? 'text-right' : ''}`}>
             {timeAgo(message.created_at)}
           </div>
         )}

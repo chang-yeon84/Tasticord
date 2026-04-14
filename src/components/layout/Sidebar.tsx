@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Heart, Activity, MessageCircle, Users } from 'lucide-react';
@@ -18,15 +18,20 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const pathnameRef = useRef(pathname);
   const { currentUser } = useAuth();
   const [unreadTotal, setUnreadTotal] = useState(0);
+  const supabase = useMemo(() => createClient(), []);
 
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
+
+  // 초기 안 읽은 메시지 수 조회
   useEffect(() => {
     async function fetchUnread() {
       if (!currentUser) return;
-      const supabase = createClient();
 
-      // 내가 참여한 채팅방의 last_read_at 가져오기
       const { data: memberships } = await supabase
         .from('chat_members')
         .select('room_id, last_read_at')
@@ -49,7 +54,39 @@ export default function Sidebar() {
     }
 
     fetchUnread();
-  }, [currentUser, pathname]);
+  }, [currentUser, pathname, supabase]);
+
+  // 새 메시지 실시간 감지
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const channel = supabase
+      .channel('sidebar-unread')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+        (payload) => {
+          const newMsg = payload.new as { sender_id: string; room_id: string };
+          if (newMsg.sender_id !== currentUser.id) {
+            // 현재 해당 채팅방을 보고 있으면 카운트 증가하지 않음
+            if (pathnameRef.current === `/messages/${newMsg.room_id}`) return;
+            setUnreadTotal((prev) => prev + 1);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser, supabase]);
+
+  // 메시지 페이지 진입 시 카운트 리셋
+  useEffect(() => {
+    if (pathname.startsWith('/messages')) {
+      setUnreadTotal(0);
+    }
+  }, [pathname]);
 
   return (
     <aside className="hidden md:flex w-[280px] border-r border-zinc-800/60 p-6 flex-col justify-between flex-shrink-0">
@@ -73,7 +110,7 @@ export default function Sidebar() {
                 <Icon className="w-[22px] h-[22px]" strokeWidth={isActive ? 2.2 : 1.8} />
                 {label}
                 {label === '메시지' && unreadTotal > 0 && (
-                  <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-purple-600 text-[10px] font-bold flex items-center justify-center">
+                  <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-purple-600 text-white text-[10px] font-bold flex items-center justify-center">
                     {unreadTotal > 99 ? '99+' : unreadTotal}
                   </span>
                 )}

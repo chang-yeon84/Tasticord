@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ChevronLeft, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import ChatBubble from '@/components/chat/ChatBubble';
 import ChatInput from '@/components/chat/ChatInput';
+import TypingBubble from '@/components/chat/TypingBubble';
 import type { ChatMessage, Profile } from '@/types';
 
 const PAGE_SIZE = 30;
@@ -27,10 +28,12 @@ export default function ChatRoomPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const presenceRef = useRef<ReturnType<typeof supabaseClient.channel> | null>(null);
+  // supabase 클라이언트는 한 번만 생성되도록 useMemo (Realtime 구독 유지 위해)
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const supabaseClient = createClient();
-  const supabase = supabaseClient;
+  const supabase = useMemo(() => createClient(), []);
+  const realtimeRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  // currentUserId를 ref로도 보관해서 Realtime 콜백에서 최신값 참조
+  const currentUserIdRef = useRef<string | null>(null);
 
   // 초기 로드
   useEffect(() => {
@@ -38,6 +41,13 @@ export default function ChatRoomPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setCurrentUserId(user.id);
+      currentUserIdRef.current = user.id;
+
+      // Realtime에 인증 토큰 명시적으로 전달 (RLS가 있는 테이블 구독 시 필요)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        supabase.realtime.setAuth(session.access_token);
+      }
 
       // 멤버 정보 (상대방 프로필 + 상대방 last_read_at)
       const { data: members } = await supabase
@@ -65,30 +75,38 @@ export default function ChatRoomPage() {
       setLoading(false);
 
       // 읽음 처리
-      await supabase
+      const now = new Date().toISOString();
+      const { error: readError } = await supabase
         .from('chat_members')
-        .update({ last_read_at: new Date().toISOString() })
+        .update({ last_read_at: now })
         .eq('room_id', roomId)
         .eq('user_id', user.id);
+      if (readError) console.error('[Chat] 읽음 처리 실패:', readError);
     }
 
     init();
   }, [roomId, supabase]);
 
-  // 읽음 처리 함수
-  const updateLastRead = useCallback(async () => {
-    if (!currentUserId) return;
-    await supabase
-      .from('chat_members')
-      .update({ last_read_at: new Date().toISOString() })
-      .eq('room_id', roomId)
-      .eq('user_id', currentUserId);
-  }, [currentUserId, roomId, supabase]);
-
   // Realtime: 메시지 수신 + 상대방 읽음 상태 감지
+  // Strict Mode 대응: removeChannel이 공유 WebSocket을 재설정하면서
+  // Presence 등 다른 채널도 함께 CLOSED되는 문제 방지
   useEffect(() => {
+    if (!currentUserId) return;
+    if (realtimeRef.current) return;
+
+    // 싱글톤 클라이언트에 이전 방문에서 남은 같은 이름의 채널이 있으면 제거
+    const channelName = `room-${roomId}`;
+    const existing = supabase.getChannels().find(
+      (ch) => ch.topic === `realtime:${channelName}`
+    );
+    if (existing) {
+      supabase.removeChannel(existing);
+    }
+
+    console.log('[Realtime] 채널 구독 시작:', roomId);
+
     const channel = supabase
-      .channel(`room:${roomId}`)
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -99,7 +117,10 @@ export default function ChatRoomPage() {
         },
         async (payload) => {
           const newMsg = payload.new as ChatMessage;
-          if (newMsg.sender_id === currentUserId) return;
+          console.log('[Realtime] 메시지 수신:', newMsg);
+
+          const myId = currentUserIdRef.current;
+          if (newMsg.sender_id === myId) return;
 
           const { data: sender } = await supabase
             .from('profiles')
@@ -108,80 +129,87 @@ export default function ChatRoomPage() {
             .single();
 
           setMessages(prev => [...prev, { ...newMsg, sender: sender as Profile }]);
-          updateLastRead();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'chat_members',
-          filter: `room_id=eq.${roomId}`,
-        },
-        (payload) => {
-          const updated = payload.new as { user_id: string; last_read_at: string };
-          // 상대방의 last_read_at이 업데이트되면 읽음 표시 갱신
-          if (updated.user_id !== currentUserId) {
-            setOtherLastRead(updated.last_read_at);
+          setIsTyping(false);
+
+          if (myId) {
+            const readAt = new Date().toISOString();
+            const { error: readErr } = await supabase
+              .from('chat_members')
+              .update({ last_read_at: readAt })
+              .eq('room_id', roomId)
+              .eq('user_id', myId);
+            if (readErr) console.error('[Chat] 읽음 처리 실패:', readErr);
+
+            // 상대방에게 읽음 알림
+            realtimeRef.current?.send({
+              type: 'broadcast',
+              event: 'read',
+              payload: { user_id: myId, last_read_at: readAt },
+            });
           }
         }
       )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [roomId, currentUserId, supabase, updateLastRead]);
-
-  // Presence: 타이핑 표시
-  useEffect(() => {
-    if (!currentUserId) return;
-
-    const presenceChannel = supabase.channel(`typing:${roomId}`, {
-      config: { presence: { key: currentUserId } },
-    });
-
-    presenceChannel
-      .on('presence', { event: 'sync' }, () => {
-        const state = presenceChannel.presenceState();
-        const someoneTyping = Object.entries(state).some(([key, presences]) => {
-          if (key === currentUserId) return false;
-          return (presences as { typing?: boolean }[]).some(p => p.typing);
-        });
-        setIsTyping(someoneTyping);
+      .on('broadcast', { event: 'read' }, (payload) => {
+        const senderId = payload.payload?.user_id;
+        if (senderId !== currentUserIdRef.current) {
+          setOtherLastRead(payload.payload?.last_read_at);
+        }
       })
-      .subscribe(async (status) => {
+      .on('broadcast', { event: 'typing' }, (payload) => {
+        const senderId = payload.payload?.user_id;
+        if (senderId === currentUserIdRef.current) return;
+        setIsTyping(true);
+      })
+      .on('broadcast', { event: 'stop_typing' }, (payload) => {
+        const senderId = payload.payload?.user_id;
+        if (senderId === currentUserIdRef.current) return;
+        setIsTyping(false);
+      })
+      .subscribe((status, err) => {
+        console.log('[Realtime] 구독 상태:', status, err || '');
+        // 구독 완료 시 읽음 상태를 상대방에게 알림
         if (status === 'SUBSCRIBED') {
-          await presenceChannel.track({ typing: false });
+          channel.send({
+            type: 'broadcast',
+            event: 'read',
+            payload: {
+              user_id: currentUserIdRef.current,
+              last_read_at: new Date().toISOString(),
+            },
+          });
         }
       });
 
-    presenceRef.current = presenceChannel;
+    realtimeRef.current = channel;
 
     return () => {
-      presenceRef.current = null;
-      supabase.removeChannel(presenceChannel);
+      supabase.removeChannel(channel);
+      realtimeRef.current = null;
     };
   }, [roomId, currentUserId, supabase]);
 
-  // 타이핑 상태 전송 함수
+  // 타이핑 상태 전송
   const sendTyping = useCallback(() => {
-    if (!presenceRef.current) return;
+    realtimeRef.current?.send({
+      type: 'broadcast',
+      event: 'typing',
+      payload: { user_id: currentUserIdRef.current },
+    });
 
-    presenceRef.current.track({ typing: true });
-
-    // 이전 타이머 취소 후 2초 뒤 해제
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
-      presenceRef.current?.track({ typing: false });
+      realtimeRef.current?.send({
+        type: 'broadcast',
+        event: 'stop_typing',
+        payload: { user_id: currentUserIdRef.current },
+      });
     }, 2000);
   }, []);
 
-  // 새 메시지 올 때 스크롤 하단으로
+  // 새 메시지 또는 타이핑 표시 시 스크롤 하단으로
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isTyping]);
 
   // 스크롤 페이지네이션: 맨 위 도달 시 이전 메시지 로드
   useEffect(() => {
@@ -239,8 +267,9 @@ export default function ChatRoomPage() {
   const handleSend = async (content: string) => {
     if (!currentUserId) return;
 
+    const tempId = crypto.randomUUID();
     const tempMessage: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: tempId,
       room_id: roomId,
       sender_id: currentUserId,
       content,
@@ -250,19 +279,26 @@ export default function ChatRoomPage() {
     };
     setMessages(prev => [...prev, tempMessage]);
 
-    await supabase.from('chat_messages').insert({
+    const { error } = await supabase.from('chat_messages').insert({
       room_id: roomId,
       sender_id: currentUserId,
       content,
     });
+
+    if (error) {
+      console.error('[Chat] 메시지 전송 실패:', error);
+      // 전송 실패 시 temp 메시지 제거
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+    }
   };
 
   // 카드 메시지 전송 (음악/게임/영화 추천)
   const handleSendCard = async (embedType: 'music' | 'game' | 'movie' | null, embedData: Record<string, unknown>) => {
     if (!currentUserId || !embedType) return;
 
+    const tempId = crypto.randomUUID();
     const tempMessage: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: tempId,
       room_id: roomId,
       sender_id: currentUserId,
       content: '',
@@ -272,13 +308,18 @@ export default function ChatRoomPage() {
     };
     setMessages(prev => [...prev, tempMessage]);
 
-    await supabase.from('chat_messages').insert({
+    const { error } = await supabase.from('chat_messages').insert({
       room_id: roomId,
       sender_id: currentUserId,
       content: '',
       embed_type: embedType,
       embed_data: embedData,
     });
+
+    if (error) {
+      console.error('[Chat] 카드 메시지 전송 실패:', error);
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+    }
   };
 
   return (
@@ -300,12 +341,7 @@ export default function ChatRoomPage() {
                 {otherUser.nickname.slice(0, 1)}
               </div>
             )}
-            <div>
-              <span className="font-semibold text-sm">{otherUser.nickname}</span>
-              {isTyping && (
-                <p className="text-[11px] text-purple-400 animate-pulse">입력 중...</p>
-              )}
-            </div>
+            <span className="font-semibold text-sm">{otherUser.nickname}</span>
           </div>
         )}
       </div>
@@ -353,6 +389,7 @@ export default function ChatRoomPage() {
             );
           })
         )}
+        {isTyping && otherUser && <TypingBubble user={otherUser} />}
         <div ref={bottomRef} />
       </div>
 
