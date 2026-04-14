@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { MessageCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -22,10 +22,10 @@ export default function MessagesPage() {
   const [chatRooms, setChatRooms] = useState<ChatRoomItem[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
     async function fetchData() {
-      const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
@@ -124,7 +124,58 @@ export default function MessagesPage() {
       setLoading(false);
     }
     fetchData();
-  }, []);
+  }, [supabase]);
+
+  // 새 메시지 수신 시 미리보기·시간·안읽은수 실시간 업데이트
+  useEffect(() => {
+    const channel = supabase
+      .channel('messages-list-updates')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+        async (payload) => {
+          const newMsg = payload.new as {
+            room_id: string;
+            sender_id: string;
+            content: string | null;
+            embed_type: string | null;
+            created_at: string;
+          };
+
+          let preview: string;
+          if (newMsg.embed_type === 'music') preview = '🎵 음악 추천 카드';
+          else if (newMsg.embed_type === 'game') preview = '🎮 게임 추천 카드';
+          else if (newMsg.embed_type === 'movie') preview = '🎬 영화/드라마 추천 카드';
+          else preview = newMsg.content || '';
+
+          const { data: { user } } = await supabase.auth.getUser();
+          const isOwnMessage = user && newMsg.sender_id === user.id;
+
+          setChatRooms((prev) => {
+            const updated = prev.map((room) => {
+              if (room.id !== newMsg.room_id) return room;
+              return {
+                ...room,
+                lastMessage: preview,
+                lastMessageAt: newMsg.created_at,
+                unreadCount: isOwnMessage ? room.unreadCount : room.unreadCount + 1,
+              };
+            });
+            // 최신 메시지 순으로 재정렬
+            return updated.sort((a, b) => {
+              const timeA = a.lastMessageAt || a.created_at;
+              const timeB = b.lastMessageAt || b.created_at;
+              return new Date(timeB).getTime() - new Date(timeA).getTime();
+            });
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase]);
 
   return (
     <div className="max-w-3xl mx-auto p-8 animate-fade-up">
@@ -166,13 +217,13 @@ export default function MessagesPage() {
                 <p className="font-semibold text-sm truncate">
                   {room.otherUser?.nickname || '알 수 없음'}
                 </p>
-                <p className="text-xs text-zinc-500 truncate mt-0.5">
+                <p className="text-xs text-zinc-400 truncate mt-0.5">
                   {room.lastMessage || '메시지가 없습니다'}
                 </p>
               </div>
               <div className="flex flex-col items-end gap-1 flex-shrink-0">
                 {room.lastMessageAt && (
-                  <span className="text-[10px] text-zinc-600">
+                  <span className="text-[10px] text-zinc-400">
                     {timeAgo(room.lastMessageAt)}
                   </span>
                 )}

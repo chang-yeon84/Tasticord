@@ -237,6 +237,11 @@ CREATE POLICY "Users can read chat members" ON chat_members FOR SELECT USING (
   room_id IN (SELECT room_id FROM chat_members WHERE user_id = auth.uid())
 );
 
+-- chat_members: 본인의 last_read_at 업데이트 허용
+CREATE POLICY "Users can update own membership" ON chat_members
+  FOR UPDATE USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
 -- chat_messages: 참여 채팅방 메시지 읽기/보내기
 CREATE POLICY "Users can read chat messages" ON chat_messages FOR SELECT USING (
   room_id IN (SELECT room_id FROM chat_members WHERE user_id = auth.uid())

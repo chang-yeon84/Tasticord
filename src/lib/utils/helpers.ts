@@ -2,6 +2,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
 export function timeAgo(date: string | Date): string {
+  if (Date.now() - new Date(date).getTime() < 60 * 1000) return '방금';
   return formatDistanceToNow(new Date(date), { addSuffix: true, locale: ko });
 }
 
