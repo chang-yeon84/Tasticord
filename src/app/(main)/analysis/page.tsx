@@ -8,6 +8,7 @@ import TasteSummary from '@/components/analysis/TasteSummary';
 import SimilarFriends from '@/components/analysis/SimilarFriends';
 import WrappedSection from '@/components/analysis/WrappedSection';
 import WrappedGamesSection from '@/components/analysis/WrappedGamesSection';
+import WrappedMoviesSection from '@/components/analysis/WrappedMoviesSection';
 
 export default function AnalysisPage() {
   const router = useRouter();
@@ -41,6 +42,7 @@ export default function AnalysisPage() {
 
       <WrappedSection />
       <WrappedGamesSection />
+      <WrappedMoviesSection />
 
       {loading ? (
         <div className="space-y-4">

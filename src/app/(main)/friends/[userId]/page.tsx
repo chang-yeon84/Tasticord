@@ -6,6 +6,7 @@ import { ChevronLeft, MessageCircle, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import type { Profile } from '@/types';
 import { getAvatarColor } from '@/lib/utils/helpers';
+import TasteCompare from '@/components/compare/TasteCompare';
 
 
 export default function FriendDetailPage() {
@@ -103,9 +104,11 @@ export default function FriendDetailPage() {
         </button>
       </div>
 
-      <div className="text-center py-12">
-        <p className="text-zinc-600">아직 연동된 플랫폼 데이터가 없습니다</p>
-        <p className="text-zinc-700 text-sm mt-2">플랫폼을 연동하면 취향 정보가 여기에 표시됩니다</p>
+      <div className="mt-4">
+        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">
+          {friend.nickname}님과 나의 취향 비교
+        </h3>
+        <TasteCompare friendId={friend.id} friendName={friend.nickname} />
       </div>
     </div>
   );

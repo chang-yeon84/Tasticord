@@ -10,15 +10,18 @@ interface Props {
   tone: Tone;
   userName?: string;
   userAvatarUrl?: string | null;
-  type: 'music' | 'game';
+  type: 'music' | 'game' | 'movie';
 }
 
+const CLOSING_COPY: Record<Props['type'], { footerRight: string; subject: string; ctaLabel: string }> = {
+  music: { footerRight: 'POWERED BY SPOTIFY', subject: '음악 취향', ctaLabel: '나도 내 음악 카드 만들기' },
+  game: { footerRight: 'POWERED BY STEAM', subject: '게임 취향', ctaLabel: '나도 내 게임 카드 만들기' },
+  movie: { footerRight: 'POWERED BY NETFLIX', subject: '영화 취향', ctaLabel: '나도 내 영화 카드 만들기' },
+};
+
 export default function ClosingCard({ tone, userName, userAvatarUrl, type }: Props) {
-  const isMusic = type === 'music';
   const eyebrow = 'SHARE';
-  const footerRight = isMusic ? 'POWERED BY SPOTIFY' : 'POWERED BY STEAM';
-  const subject = isMusic ? '음악 취향' : '게임 취향';
-  const ctaLabel = isMusic ? '나도 내 음악 카드 만들기' : '나도 내 게임 카드 만들기';
+  const { footerRight, subject, ctaLabel } = CLOSING_COPY[type];
 
   const [copied, setCopied] = useState(false);
   const [shared, setShared] = useState(false);

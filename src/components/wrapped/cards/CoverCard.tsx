@@ -9,15 +9,17 @@ interface Props {
   tone: Tone;
   userName?: string;
   userAvatarUrl?: string | null;
-  type: 'music' | 'game';
+  type: 'music' | 'game' | 'movie';
 }
 
+const COVER_COPY: Record<Props['type'], { eyebrow: string; footerRight: string; subject: string; sectionLabel: string }> = {
+  music: { eyebrow: 'MUSIC WRAPPED · 2026', footerRight: 'POWERED BY SPOTIFY', subject: '음악 취향', sectionLabel: '음악 결산' },
+  game: { eyebrow: 'GAMES WRAPPED · 2026', footerRight: 'POWERED BY STEAM', subject: '게임 취향', sectionLabel: '게임 결산' },
+  movie: { eyebrow: 'MOVIES WRAPPED · 2026', footerRight: 'POWERED BY NETFLIX', subject: '영화 취향', sectionLabel: '영화 결산' },
+};
+
 export default function CoverCard({ tone, userName, userAvatarUrl, type }: Props) {
-  const isMusic = type === 'music';
-  const eyebrow = isMusic ? 'MUSIC WRAPPED · 2026' : 'GAMES WRAPPED · 2026';
-  const footerRight = isMusic ? 'POWERED BY SPOTIFY' : 'POWERED BY STEAM';
-  const subject = isMusic ? '음악 취향' : '게임 취향';
-  const sectionLabel = isMusic ? '음악 결산' : '게임 결산';
+  const { eyebrow, footerRight, subject, sectionLabel } = COVER_COPY[type];
   const displayName = userName ?? '사용자';
 
   return (
