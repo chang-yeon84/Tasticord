@@ -47,7 +47,10 @@ export async function POST(req: Request) {
       .eq('id', pending.id);
     if (updErr) {
       console.error('[friends/accept] update', updErr);
-      return NextResponse.json({ error: 'DB 업데이트 실패' }, { status: 500 });
+      return NextResponse.json(
+        { error: `DB 업데이트 실패 (${updErr.code ?? '?'}: ${updErr.message ?? ''})` },
+        { status: 500 },
+      );
     }
 
     // 반대 방향 INSERT (이미 있을 수 있으니 upsert)
@@ -59,7 +62,10 @@ export async function POST(req: Request) {
       );
     if (insErr) {
       console.error('[friends/accept] upsert reverse', insErr);
-      return NextResponse.json({ error: 'DB 양방향 저장 실패' }, { status: 500 });
+      return NextResponse.json(
+        { error: `DB 양방향 저장 실패 (${insErr.code ?? '?'}: ${insErr.message ?? ''})` },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({ ok: true });

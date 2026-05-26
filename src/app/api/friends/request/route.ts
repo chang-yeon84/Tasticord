@@ -71,7 +71,15 @@ export async function POST(req: Request) {
       // UNIQUE 위반은 그새 들어온 동시 요청 — OK로 응답
       if (error.code !== '23505') {
         console.error('[friends/request] insert', error);
-        return NextResponse.json({ error: 'DB 저장 실패' }, { status: 500 });
+        // 42703 = undefined column → 마이그레이션 미적용일 가능성 높음
+        const hint =
+          error.code === '42703'
+            ? ' — friendships-pending 마이그레이션이 아직 적용 안 된 것 같아요. supabase-migration-friendships-pending.sql 실행 후 다시 시도.'
+            : '';
+        return NextResponse.json(
+          { error: `DB 저장 실패 (${error.code ?? '?'}: ${error.message ?? ''})${hint}` },
+          { status: 500 },
+        );
       }
     }
 
