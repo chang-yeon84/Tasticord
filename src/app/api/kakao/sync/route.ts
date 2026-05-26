@@ -24,7 +24,11 @@ const KAKAO_FRIENDS_URL = 'https://kapi.kakao.com/v1/api/talk/friends';
 async function fetchKakaoFriends(
   userId: string,
   fallbackToken: string | null,
-): Promise<{ status: 'ok'; data: KakaoFriendsResponse } | { status: 'reauth' } | { status: 'error' }> {
+): Promise<
+  | { status: 'ok'; data: KakaoFriendsResponse }
+  | { status: 'reauth' }
+  | { status: 'error'; httpStatus: number; body: string }
+> {
   const tokenInfo = await getValidKakaoToken(userId);
   const primary = tokenInfo?.accessToken ?? fallbackToken;
   if (!primary) return { status: 'reauth' };
@@ -33,7 +37,7 @@ async function fetchKakaoFriends(
     headers: { Authorization: `Bearer ${primary}` },
   });
 
-  // 401이고 polished refresh를 안 썼다면(폴백 토큰 사용 케이스) — refresh 시도
+  // 401이고 폴백 토큰 사용 케이스 — refresh 한 번 더 시도
   if (res.status === 401 && !tokenInfo) {
     const refreshed = await getValidKakaoToken(userId);
     if (refreshed) {
@@ -44,7 +48,12 @@ async function fetchKakaoFriends(
   }
 
   if (res.status === 401) return { status: 'reauth' };
-  if (!res.ok) return { status: 'error' };
+  if (!res.ok) {
+    // 카카오가 준 본문을 한 번 읽어 로그 + 호출자에게 전달 (진단용)
+    const body = await res.text().catch(() => '');
+    console.error('[kakao-sync] friends API 실패', res.status, body);
+    return { status: 'error', httpStatus: res.status, body };
+  }
   return { status: 'ok', data: (await res.json()) as KakaoFriendsResponse };
 }
 
@@ -64,8 +73,18 @@ export async function POST() {
       return NextResponse.json({ error: '재로그인이 필요합니다' }, { status: 400 });
     }
     if (result.status === 'error') {
+      // 카카오 응답에서 추출한 메시지가 있으면 같이 노출 (코드 + 카카오 본문 일부)
+      let kakaoMsg = '';
+      try {
+        const parsed = JSON.parse(result.body) as { msg?: string; code?: number };
+        if (parsed?.msg) kakaoMsg = ` — ${parsed.msg}${parsed.code !== undefined ? ` (code ${parsed.code})` : ''}`;
+      } catch {
+        // 본문이 JSON 아니면 무시
+      }
       return NextResponse.json(
-        { error: '카카오 친구 목록을 가져올 수 없습니다' },
+        {
+          error: `카카오 친구 목록을 가져올 수 없습니다 (HTTP ${result.httpStatus})${kakaoMsg}`,
+        },
         { status: 500 },
       );
     }
