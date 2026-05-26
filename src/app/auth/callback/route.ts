@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -69,22 +70,78 @@ export async function GET(request: Request) {
 
   // 프로필 upsert는 즉시 (반드시 동기 처리)
   const admin = createAdminClient();
-  await admin.from('profiles').upsert(
-    {
-      id: user.id,
-      nickname:
-        user.user_metadata?.full_name ||
-        user.user_metadata?.name ||
-        user.user_metadata?.preferred_username ||
-        '사용자',
-      avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
-      kakao_id: user.user_metadata?.provider_id ? parseInt(user.user_metadata.provider_id) : null,
-    },
-    { onConflict: 'id' },
-  );
+
+  // 기본 필드. nickname/avatar는 사용자가 직접 편집한 값을 덮어쓰지 않도록 주의:
+  //   - 신규 행이면 카카오 metadata 사용
+  //   - 기존 행이면 기존 nickname/avatar 유지(편집된 값 보존) — onConflict 시 EXCLUDED 사용 안 함
+  const fromKakaoNickname =
+    user.user_metadata?.full_name ||
+    user.user_metadata?.name ||
+    user.user_metadata?.preferred_username ||
+    '사용자';
+  const fromKakaoAvatar = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
+  const kakaoIdNum = user.user_metadata?.provider_id ? parseInt(user.user_metadata.provider_id) : null;
+
+  // 기존 프로필이 있으면 nickname/avatar는 그대로 두고, 카카오 토큰만 갱신
+  const { data: existing } = await admin
+    .from('profiles')
+    .select('id, nickname, avatar_url')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  const profileRow: Record<string, unknown> = {
+    id: user.id,
+    kakao_id: kakaoIdNum,
+    nickname: existing?.nickname ?? fromKakaoNickname,
+    avatar_url: existing?.avatar_url ?? fromKakaoAvatar,
+  };
+
+  // 카카오 토큰 저장 (자동 갱신용) — 둘 다 있을 때만
+  const providerRefreshToken = data.session.provider_refresh_token;
+  if (providerToken && providerRefreshToken) {
+    profileRow.kakao_access_token = providerToken;
+    profileRow.kakao_refresh_token = providerRefreshToken;
+    // Kakao access token 기본 6시간 — provider_token_expires_at 노출 안 되므로 보수적으로 6h 사용
+    profileRow.kakao_token_expires_at = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+  }
+
+  await admin.from('profiles').upsert(profileRow, { onConflict: 'id' });
+
+  // 초대 링크(?ref=) 쿠키 처리 — 보낸 사람한테서 자동 pending 요청 INSERT
+  // 신규/기존 가입자 모두 적용 (이미 친구거나 요청 중이면 자연히 noop)
+  try {
+    const cookieStore = await cookies();
+    const refCookie = cookieStore.get('tasticord_ref');
+    const refUserId = refCookie?.value;
+    if (refUserId && refUserId !== user.id && /^[0-9a-f-]{36}$/i.test(refUserId)) {
+      const { data: refProfile } = await admin
+        .from('profiles')
+        .select('id')
+        .eq('id', refUserId)
+        .maybeSingle();
+      if (refProfile) {
+        const { data: existingRel } = await admin
+          .from('friendships')
+          .select('id')
+          .or(
+            `and(user_id.eq.${refUserId},friend_id.eq.${user.id}),and(user_id.eq.${user.id},friend_id.eq.${refUserId})`,
+          )
+          .maybeSingle();
+        if (!existingRel) {
+          await admin.from('friendships').insert({
+            user_id: refUserId,
+            friend_id: user.id,
+            status: 'pending',
+          });
+        }
+      }
+      cookieStore.delete('tasticord_ref');
+    }
+  } catch (e) {
+    console.error('[auth/callback] invite ref 처리 실패', e);
+  }
 
   // 친구 동기화는 백그라운드 (await 안 함) — 리다이렉트가 친구 수에 영향받지 않음
-  // 첫 동기화는 좀 늦더라도 친구 페이지의 수동 동기화 버튼으로 보완 가능
   if (providerToken) {
     void syncKakaoFriends(user.id, providerToken);
   }

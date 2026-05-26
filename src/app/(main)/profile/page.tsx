@@ -2,12 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useAppStore } from '@/stores/useAppStore';
 import { createClient } from '@/lib/supabase/client';
 import StatusDot from '@/components/ui/StatusDot';
 import NetflixUpload from '@/components/NetflixUpload';
 import type { PlatformConnection } from '@/types';
 import { FaSpotify, FaSteam } from 'react-icons/fa';
 import { SiApplemusic } from 'react-icons/si';
+import { Pencil, Check, X, Link2, Copy } from 'lucide-react';
 
 // react-icons의 공식 브랜드 로고 사용
 const allPlatforms = [
@@ -18,6 +20,7 @@ const allPlatforms = [
 
 export default function ProfilePage() {
   const { currentUser, signOut } = useAuth();
+  const setCurrentUser = useAppStore((s) => s.setCurrentUser);
   const [connections, setConnections] = useState<PlatformConnection[]>([]);
   const [friendCount, setFriendCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -58,6 +61,67 @@ export default function ProfilePage() {
     } catch {
       alert('회원 탈퇴에 실패했습니다. 잠시 후 다시 시도해주세요.');
       setDeleting(false);
+    }
+  };
+
+  // 닉네임 인라인 편집 (카카오에서 닉네임을 못 받아왔거나 바꾸고 싶을 때)
+  const [editingNick, setEditingNick] = useState(false);
+  const [nickValue, setNickValue] = useState('');
+  const [savingNick, setSavingNick] = useState(false);
+
+  // 초대 링크 복사
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const handleCopyInvite = async () => {
+    if (!currentUser) return;
+    const url = `${window.location.origin}/auth/login?ref=${currentUser.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2000);
+    } catch {
+      // 권한 거부 등
+      alert('복사 실패 — 직접 선택해 복사해주세요:\n' + url);
+    }
+  };
+
+  const startEditNick = () => {
+    setNickValue(currentUser?.nickname ?? '');
+    setEditingNick(true);
+  };
+  const cancelEditNick = () => {
+    setEditingNick(false);
+    setNickValue('');
+  };
+  const saveNick = async () => {
+    const trimmed = nickValue.trim();
+    if (trimmed.length === 0) {
+      alert('닉네임을 입력하세요');
+      return;
+    }
+    if (trimmed === currentUser?.nickname) {
+      setEditingNick(false);
+      return;
+    }
+    setSavingNick(true);
+    try {
+      const res = await fetch('/api/profile/update', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nickname: trimmed }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        alert(json.error ?? '닉네임 변경 실패');
+        return;
+      }
+      if (currentUser) {
+        setCurrentUser({ ...currentUser, nickname: trimmed });
+      }
+      setEditingNick(false);
+    } catch {
+      alert('네트워크 오류로 변경 실패');
+    } finally {
+      setSavingNick(false);
     }
   };
 
@@ -135,7 +199,49 @@ export default function ProfilePage() {
             {currentUser?.nickname?.slice(0, 1) || '나'}
           </div>
         )}
-        <div className="text-xl font-bold">{currentUser?.nickname || '내 이름'}</div>
+        {editingNick ? (
+          <div className="flex items-center gap-2 justify-center">
+            <input
+              value={nickValue}
+              onChange={(e) => setNickValue(e.target.value)}
+              maxLength={20}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveNick();
+                if (e.key === 'Escape') cancelEditNick();
+              }}
+              disabled={savingNick}
+              className="px-3 py-1.5 text-base font-bold rounded-lg bg-zinc-800 border border-zinc-700 outline-none focus:border-zinc-500 text-center"
+            />
+            <button
+              onClick={saveNick}
+              disabled={savingNick}
+              aria-label="저장"
+              className="p-1.5 rounded-full bg-white text-black hover:bg-zinc-100 disabled:opacity-50 transition"
+            >
+              <Check className="w-4 h-4" />
+            </button>
+            <button
+              onClick={cancelEditNick}
+              disabled={savingNick}
+              aria-label="취소"
+              className="p-1.5 rounded-full text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 justify-center">
+            <div className="text-xl font-bold">{currentUser?.nickname || '내 이름'}</div>
+            <button
+              onClick={startEditNick}
+              aria-label="닉네임 편집"
+              className="p-1 rounded-full text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/60 transition"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         <div className="text-sm text-zinc-500 mt-1">카카오톡으로 로그인됨</div>
         <div className="flex justify-center gap-8 mt-5">
           <div className="text-center"><div className="text-xl font-bold">{connectedCount}</div><div className="text-xs text-zinc-500 mt-0.5">연동 플랫폼</div></div>
@@ -179,6 +285,39 @@ export default function ProfilePage() {
           );
         })}
       </div>
+      {/* 친구 초대 링크 */}
+      <div className="mt-8">
+        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">친구 초대</h3>
+        <div className="bg-gradient-to-br from-purple-500/15 to-pink-500/10 border border-purple-500/20 rounded-2xl p-5">
+          <div className="flex items-start gap-3 mb-4">
+            <Link2 className="w-5 h-5 text-purple-400 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-semibold mb-1">내 초대 링크</div>
+              <div className="text-xs text-zinc-400 leading-relaxed">
+                이 링크로 가입하면 자동으로 친구 요청이 전송돼요. 카톡에 공유해 보세요.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={handleCopyInvite}
+            disabled={!currentUser}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white text-black text-sm font-semibold hover:bg-zinc-100 disabled:opacity-50 transition"
+          >
+            {inviteCopied ? (
+              <>
+                <Check className="w-4 h-4" />
+                복사됐어요
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4" />
+                링크 복사
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
       {/* Netflix 시청 기록 업로드 */}
       <div className="mt-8">
         <NetflixUpload />
