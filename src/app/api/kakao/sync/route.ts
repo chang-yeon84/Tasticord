@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getValidKakaoToken } from '@/lib/api/kakao-token';
 
 interface KakaoFriend {
   id: number;
@@ -14,6 +15,39 @@ interface KakaoFriendsResponse {
   total_count?: number;
 }
 
+const KAKAO_FRIENDS_URL = 'https://kapi.kakao.com/v1/api/talk/friends';
+
+// 카카오 친구목록 호출. 만료된 토큰은 refresh로 자동 갱신.
+//   1) DB에 저장된 토큰을 getValidKakaoToken으로 가져옴 (만료 시 자동 refresh)
+//   2) 1이 null이면 session.provider_token 폴백 (마이그/콜백 이전 가입자 호환)
+//   3) 그래도 401이면 refresh 한 번 더 시도 후, 실패 시 재로그인 안내
+async function fetchKakaoFriends(
+  userId: string,
+  fallbackToken: string | null,
+): Promise<{ status: 'ok'; data: KakaoFriendsResponse } | { status: 'reauth' } | { status: 'error' }> {
+  const tokenInfo = await getValidKakaoToken(userId);
+  const primary = tokenInfo?.accessToken ?? fallbackToken;
+  if (!primary) return { status: 'reauth' };
+
+  let res = await fetch(KAKAO_FRIENDS_URL, {
+    headers: { Authorization: `Bearer ${primary}` },
+  });
+
+  // 401이고 polished refresh를 안 썼다면(폴백 토큰 사용 케이스) — refresh 시도
+  if (res.status === 401 && !tokenInfo) {
+    const refreshed = await getValidKakaoToken(userId);
+    if (refreshed) {
+      res = await fetch(KAKAO_FRIENDS_URL, {
+        headers: { Authorization: `Bearer ${refreshed.accessToken}` },
+      });
+    }
+  }
+
+  if (res.status === 401) return { status: 'reauth' };
+  if (!res.ok) return { status: 'error' };
+  return { status: 'ok', data: (await res.json()) as KakaoFriendsResponse };
+}
+
 export async function POST() {
   try {
     const supabase = await createClient();
@@ -23,33 +57,20 @@ export async function POST() {
     }
 
     const user = session.user;
-    const providerToken = session.provider_token;
+    const fallbackToken = session.provider_token ?? null;
 
-    if (!providerToken) {
-      return NextResponse.json(
-        { error: '재로그인이 필요합니다' },
-        { status: 400 }
-      );
+    const result = await fetchKakaoFriends(user.id, fallbackToken);
+    if (result.status === 'reauth') {
+      return NextResponse.json({ error: '재로그인이 필요합니다' }, { status: 400 });
     }
-
-    const friendsRes = await fetch('https://kapi.kakao.com/v1/api/talk/friends', {
-      headers: { Authorization: `Bearer ${providerToken}` },
-    });
-
-    if (!friendsRes.ok) {
-      if (friendsRes.status === 401) {
-        return NextResponse.json(
-          { error: '재로그인이 필요합니다' },
-          { status: 400 }
-        );
-      }
+    if (result.status === 'error') {
       return NextResponse.json(
         { error: '카카오 친구 목록을 가져올 수 없습니다' },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-    const friendsData: KakaoFriendsResponse = await friendsRes.json();
+    const friendsData = result.data;
     const admin = createAdminClient();
 
     let synced = 0;
@@ -64,7 +85,6 @@ export async function POST() {
 
       if (!friendProfile) continue;
 
-      // check if friendship already exists
       const { data: existing } = await admin
         .from('friendships')
         .select('id')
@@ -80,7 +100,7 @@ export async function POST() {
           friend_id: friendProfile.id,
           kakao_friend_id: friend.id,
         },
-        { onConflict: 'user_id,friend_id' }
+        { onConflict: 'user_id,friend_id' },
       );
 
       const { error: err2 } = await admin.from('friendships').upsert(
@@ -89,7 +109,7 @@ export async function POST() {
           friend_id: user.id,
           kakao_friend_id: null,
         },
-        { onConflict: 'user_id,friend_id' }
+        { onConflict: 'user_id,friend_id' },
       );
 
       if (!err1 && !err2) {
@@ -103,7 +123,7 @@ export async function POST() {
     console.error('Kakao sync error:', e);
     return NextResponse.json(
       { error: '동기화 중 오류가 발생했습니다' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
