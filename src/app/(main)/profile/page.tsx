@@ -9,7 +9,7 @@ import NetflixUpload from '@/components/NetflixUpload';
 import type { PlatformConnection } from '@/types';
 import { FaSpotify, FaSteam } from 'react-icons/fa';
 import { SiApplemusic } from 'react-icons/si';
-import { Pencil, Check, X } from 'lucide-react';
+import { Pencil, Check, X, Link2, Copy } from 'lucide-react';
 
 // react-icons의 공식 브랜드 로고 사용
 const allPlatforms = [
@@ -31,6 +31,21 @@ export default function ProfilePage() {
   const [editingNick, setEditingNick] = useState(false);
   const [nickValue, setNickValue] = useState('');
   const [savingNick, setSavingNick] = useState(false);
+
+  // 초대 링크 복사
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const handleCopyInvite = async () => {
+    if (!currentUser) return;
+    const url = `${window.location.origin}/auth/login?ref=${currentUser.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2000);
+    } catch {
+      // 권한 거부 등
+      alert('복사 실패 — 직접 선택해 복사해주세요:\n' + url);
+    }
+  };
 
   const startEditNick = () => {
     setNickValue(currentUser?.nickname ?? '');
@@ -233,6 +248,39 @@ export default function ProfilePage() {
           );
         })}
       </div>
+      {/* 친구 초대 링크 */}
+      <div className="mt-8">
+        <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">친구 초대</h3>
+        <div className="bg-gradient-to-br from-purple-500/15 to-pink-500/10 border border-purple-500/20 rounded-2xl p-5">
+          <div className="flex items-start gap-3 mb-4">
+            <Link2 className="w-5 h-5 text-purple-400 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-semibold mb-1">내 초대 링크</div>
+              <div className="text-xs text-zinc-400 leading-relaxed">
+                이 링크로 가입하면 자동으로 친구 요청이 전송돼요. 카톡에 공유해 보세요.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={handleCopyInvite}
+            disabled={!currentUser}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white text-black text-sm font-semibold hover:bg-zinc-100 disabled:opacity-50 transition"
+          >
+            {inviteCopied ? (
+              <>
+                <Check className="w-4 h-4" />
+                복사됐어요
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4" />
+                링크 복사
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
       {/* Netflix 시청 기록 업로드 */}
       <div className="mt-8">
         <NetflixUpload />

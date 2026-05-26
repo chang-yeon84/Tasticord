@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 
@@ -106,8 +107,41 @@ export async function GET(request: Request) {
 
   await admin.from('profiles').upsert(profileRow, { onConflict: 'id' });
 
+  // 초대 링크(?ref=) 쿠키 처리 — 보낸 사람한테서 자동 pending 요청 INSERT
+  // 신규/기존 가입자 모두 적용 (이미 친구거나 요청 중이면 자연히 noop)
+  try {
+    const cookieStore = await cookies();
+    const refCookie = cookieStore.get('tasticord_ref');
+    const refUserId = refCookie?.value;
+    if (refUserId && refUserId !== user.id && /^[0-9a-f-]{36}$/i.test(refUserId)) {
+      const { data: refProfile } = await admin
+        .from('profiles')
+        .select('id')
+        .eq('id', refUserId)
+        .maybeSingle();
+      if (refProfile) {
+        const { data: existingRel } = await admin
+          .from('friendships')
+          .select('id')
+          .or(
+            `and(user_id.eq.${refUserId},friend_id.eq.${user.id}),and(user_id.eq.${user.id},friend_id.eq.${refUserId})`,
+          )
+          .maybeSingle();
+        if (!existingRel) {
+          await admin.from('friendships').insert({
+            user_id: refUserId,
+            friend_id: user.id,
+            status: 'pending',
+          });
+        }
+      }
+      cookieStore.delete('tasticord_ref');
+    }
+  } catch (e) {
+    console.error('[auth/callback] invite ref 처리 실패', e);
+  }
+
   // 친구 동기화는 백그라운드 (await 안 함) — 리다이렉트가 친구 수에 영향받지 않음
-  // 첫 동기화는 좀 늦더라도 친구 페이지의 수동 동기화 버튼으로 보완 가능
   if (providerToken) {
     void syncKakaoFriends(user.id, providerToken);
   }

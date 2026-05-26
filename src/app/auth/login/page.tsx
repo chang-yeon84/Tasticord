@@ -8,6 +8,16 @@ export default function LoginPage() {
   const router = useRouter();
   const { signInWithKakao, currentUser, loading } = useAuth();
 
+  // 초대 링크 (?ref=유저ID)로 들어왔으면 쿠키에 저장 → 콜백에서 자동 친구 요청 처리
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    if (ref && /^[0-9a-f-]{36}$/i.test(ref)) {
+      // 10분 유효 — OAuth 왕복 안에 콜백이 소비. SameSite=Lax 라 카카오 redirect도 통과
+      document.cookie = `tasticord_ref=${ref}; Max-Age=600; Path=/; SameSite=Lax`;
+    }
+  }, []);
+
   // 이미 로그인된 상태면 홈으로 리다이렉트
   useEffect(() => {
     if (!loading && currentUser) {
